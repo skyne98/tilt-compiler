@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 tilt-ast = { path = "../tilt-ast" }
 tilt-parser = { path = "../tilt-parser" }
+tilt-ir = { path = "../tilt-ir" }
 logos = { workspace = true }

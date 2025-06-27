@@ -1,27 +1,31 @@
 // ===================================================================
 // FILE: main.rs
 //
-// DESC: The main driver for the TILT compiler using LALRPOP parser.
+// DESC: The main driver for the TILT compiler using LALRPOP parser
+//       and semantic analysis with IR generation.
 // ===================================================================
 
 use tilt_parser::{Token, ProgramParser};
+use tilt_ir::lower_program;
 use logos::Logos;
 
 // Our sample TILT program, demonstrating basic features for the minimal parser.
 const TILT_CODE: &str = r#"
-# Import the host function for printing a character.
+# Import host functions
 import "env" "putc" -> void
+import "env" "getc" -> i32
 
 # Main entry point.
 fn main() -> void {
 entry:
-    result:i32 = call putc()
+    result:i32 = call getc()
+    call putc()
     ret
 }
 "#;
 
 fn main() {
-    println!("--- TILT COMPILER with LALRPOP ---");
+    println!("--- TILT COMPILER with LALRPOP and IR ---");
     println!("Parsing source code:\n{}\n", TILT_CODE);
 
     // 1. Lexing Stage (logos)
@@ -51,7 +55,23 @@ fn main() {
                 Ok(program_ast) => {
                     println!("--- Parser Output (AST) ---");
                     println!("{:#?}", program_ast);
-                    println!("\nSUCCESS: Program parsed successfully with LALRPOP!");
+                    println!();
+
+                    // 3. Semantic Analysis & IR Generation
+                    match lower_program(&program_ast) {
+                        Ok(program_ir) => {
+                            println!("--- IR Output (Validated IR) ---");
+                            println!("{:#?}", program_ir);
+                            println!("\nSUCCESS: Program compiled to IR successfully!");
+                        }
+                        Err(errors) => {
+                            eprintln!("--- Semantic Errors ---");
+                            for error in errors {
+                                eprintln!("ERROR: {}", error);
+                            }
+                            eprintln!("\nFAILED: Program has semantic errors.");
+                        }
+                    }
                 }
                 Err(e) => {
                     eprintln!("ERROR: Failed to parse program.");
