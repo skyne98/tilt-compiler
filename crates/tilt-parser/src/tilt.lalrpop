@@ -95,9 +95,12 @@ pub Expression: Expression<'input> = {
     "call" <name:Identifier> "(" <arg1:Value> "," <arg2:Value> ")" => Expression::Call { name, args: vec![arg1, arg2] },
 };
 
-// Simple instruction parsing - only assignment for now
+// Simple instruction parsing - assignment and call instructions
 pub Instruction: Instruction<'input> = {
     <dest:TypedIdentifier> "=" <expr:Expression> => Instruction::Assign { dest, expr },
+    "call" <name:Identifier> "(" ")" => Instruction::Call { name, args: Vec::new() },
+    "call" <name:Identifier> "(" <arg:Value> ")" => Instruction::Call { name, args: vec![arg] },
+    "call" <name:Identifier> "(" <arg1:Value> "," <arg2:Value> ")" => Instruction::Call { name, args: vec![arg1, arg2] },
 };
 
 // Simple terminator parsing - no optional value to avoid ambiguity

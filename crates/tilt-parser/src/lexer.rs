@@ -9,8 +9,8 @@
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq, Clone, Copy)]
-#[logos(skip r"[ \t\n\f]+")] // Ignore this regex
-#[logos(skip r"#.*")]        // Ignore comments
+#[logos(skip r"[ \t\n\r\f]+")] // Ignore this regex
+#[logos(skip r"#.*")]          // Ignore comments
 pub enum Token<'a> {
     // Keywords
     #[token("fn")]
@@ -63,7 +63,7 @@ pub enum Token<'a> {
     Arrow,
 
     // Literals and Identifiers
-    #[regex(r#""[^"]*""#, |lex| &lex.slice()[1..lex.slice().len()-1])]
+    #[regex(r#""([^"\\]|\\.)*""#, |lex| &lex.slice()[1..lex.slice().len()-1])]
     String(&'a str),
     
     #[regex("-?[0-9]+", |lex| lex.slice())]

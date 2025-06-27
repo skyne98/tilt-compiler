@@ -6,6 +6,7 @@
 // ===================================================================
 
 pub mod lexer;
+pub mod tests;
 
 // Include the generated LALRPOP parser
 use lalrpop_util::lalrpop_mod;

@@ -56,6 +56,11 @@ pub enum Instruction<'a> {
         address: Value<'a>,
         value: Value<'a>,
     },
+    // e.g., `call my_func(arg1)` (no assignment)
+    Call {
+        name: Identifier<'a>,
+        args: Vec<Value<'a>>,
+    },
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -81,7 +86,9 @@ pub enum Terminator<'a> {
     // `ret` or `ret some_val`
     Ret(Option<Value<'a>>),
     // `br my_label`
-    Br { label: Identifier<'a> },
+    Br {
+        label: Identifier<'a>,
+    },
     // `br_if cond, true_label, false_label`
     BrIf {
         cond: Value<'a>,
