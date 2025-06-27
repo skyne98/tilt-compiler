@@ -280,20 +280,33 @@ fn lower_instruction(
                         // Lower arguments
                         let mut ir_args = Vec::new();
                         for (arg, expected_type) in args.iter().zip(param_types.iter()) {
-                            match lower_value(ctx, arg) {
-                                Ok((value_id, actual_type)) => {
-                                    // Type check
-                                    if actual_type != *expected_type {
-                                        ctx.error(SemanticError::TypeMismatch {
-                                            expected: *expected_type,
-                                            found: actual_type,
+                            match arg {
+                                tilt_ast::Value::Variable(var_name) => {
+                                    if let Some((value_id, actual_type)) = ctx.lookup_variable(var_name) {
+                                        // Type check
+                                        if actual_type != *expected_type {
+                                            ctx.error(SemanticError::TypeMismatch {
+                                                expected: *expected_type,
+                                                found: actual_type,
+                                                location: format!("argument to function '{}'", name),
+                                            });
+                                            return Err(());
+                                        }
+                                        ir_args.push(value_id);
+                                    } else {
+                                        ctx.error(SemanticError::UndefinedIdentifier {
+                                            name: var_name.to_string(),
                                             location: format!("argument to function '{}'", name),
                                         });
                                         return Err(());
                                     }
-                                    ir_args.push(value_id);
                                 }
-                                Err(_) => return Err(()),
+                                tilt_ast::Value::Constant(const_val) => {
+                                    // Create a constant instruction for this argument
+                                    let const_value_id = func.next_value();
+                                    func.constants.insert(const_value_id, (*const_val, *expected_type));
+                                    ir_args.push(const_value_id);
+                                }
                             }
                         }
 
@@ -472,19 +485,32 @@ fn lower_instruction(
                 // Lower arguments
                 let mut ir_args = Vec::new();
                 for (arg, expected_type) in args.iter().zip(param_types.iter()) {
-                    match lower_value(ctx, arg) {
-                        Ok((value_id, actual_type)) => {
-                            if actual_type != *expected_type {
-                                ctx.error(SemanticError::TypeMismatch {
-                                    expected: *expected_type,
-                                    found: actual_type,
+                    match arg {
+                        tilt_ast::Value::Variable(var_name) => {
+                            if let Some((value_id, actual_type)) = ctx.lookup_variable(var_name) {
+                                if actual_type != *expected_type {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: *expected_type,
+                                        found: actual_type,
+                                        location: format!("argument to function '{}'", name),
+                                    });
+                                    return Err(());
+                                }
+                                ir_args.push(value_id);
+                            } else {
+                                ctx.error(SemanticError::UndefinedIdentifier {
+                                    name: var_name.to_string(),
                                     location: format!("argument to function '{}'", name),
                                 });
                                 return Err(());
                             }
-                            ir_args.push(value_id);
                         }
-                        Err(_) => return Err(()),
+                        tilt_ast::Value::Constant(const_val) => {
+                            // Create a constant instruction for this argument
+                            let const_value_id = func.next_value();
+                            func.constants.insert(const_value_id, (*const_val, *expected_type));
+                            ir_args.push(const_value_id);
+                        }
                     }
                 }
 
@@ -689,3 +715,5 @@ fn lower_value(
         }
     }
 }
+
+

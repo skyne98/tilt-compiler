@@ -124,6 +124,13 @@ pub Block: Block<'input> = {
 
 // Simple import declaration parsing
 pub ImportDecl: ImportDecl<'input> = {
+    "import" <module:StringLiteral> <name:StringLiteral> "(" <params:ParameterList> ")" "->" <return_type:Type> => 
+        ImportDecl {
+            module,
+            name,
+            params,
+            return_type,
+        },
     "import" <module:StringLiteral> <name:StringLiteral> "->" <return_type:Type> => 
         ImportDecl {
             module,
@@ -135,6 +142,13 @@ pub ImportDecl: ImportDecl<'input> = {
 
 // Simple function definition parsing
 pub FunctionDef: FunctionDef<'input> = {
+    "fn" <name:Identifier> "(" <params:ParameterList> ")" "->" <return_type:Type> "{" <blocks:Block*> "}" => 
+        FunctionDef {
+            name,
+            params,
+            return_type,
+            blocks,
+        },
     "fn" <name:Identifier> "(" ")" "->" <return_type:Type> "{" <blocks:Block*> "}" => 
         FunctionDef {
             name,
@@ -153,4 +167,13 @@ pub TopLevelItem: TopLevelItem<'input> = {
 // Program parsing (root rule)
 pub Program: Program<'input> = {
     <items:TopLevelItem*> => Program { items },
+};
+
+// Parameter list for functions and imports
+pub ParameterList: Vec<TypedIdentifier<'input>> = {
+    <param:TypedIdentifier> => vec![param],
+    <mut params:ParameterList> "," <param:TypedIdentifier> => {
+        params.push(param);
+        params
+    },
 };

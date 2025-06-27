@@ -1,10 +1,11 @@
 [package]
 name = "tiltc"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 tilt-ast = { path = "../tilt-ast" }
 tilt-parser = { path = "../tilt-parser" }
 tilt-ir = { path = "../tilt-ir" }
+tilt-codegen-cranelift = { path = "../tilt-codegen-cranelift" }
 logos = { workspace = true }

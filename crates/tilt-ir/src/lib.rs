@@ -41,6 +41,8 @@ pub struct Function {
     pub blocks: Vec<BasicBlock>,
     pub entry_block: BlockId,
     pub next_value_id: ValueId, // For generating unique value IDs
+    /// Map of constant values (value_id -> (constant_value, type))
+    pub constants: std::collections::HashMap<ValueId, (i64, Type)>,
 }
 
 /// Opaque identifier for a basic block
@@ -277,6 +279,7 @@ impl Function {
             blocks: Vec::new(),
             entry_block: BlockId(0),
             next_value_id: ValueId(0),
+            constants: std::collections::HashMap::new(),
         }
     }
     

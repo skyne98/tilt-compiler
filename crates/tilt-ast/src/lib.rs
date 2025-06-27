@@ -103,7 +103,7 @@ pub struct TypedIdentifier<'a> {
     pub ty: Type,
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum Type {
     I32,
     I64,
