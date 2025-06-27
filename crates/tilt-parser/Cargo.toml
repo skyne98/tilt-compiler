@@ -1,0 +1,12 @@
+[package]
+name = "tilt-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+logos = { workspace = true }
+lalrpop-util = { workspace = true }
+tilt-ast = { path = "../tilt-ast" }
+
+[build-dependencies]
+lalrpop = { workspace = true }

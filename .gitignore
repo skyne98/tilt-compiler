@@ -1,0 +1,44 @@
+# Rust build artifacts
+/target/
+*/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo lock file for libraries (keep for applications)
+# Cargo.lock is typically committed for applications but not for libraries
+# Since this is a compiler project with binaries, we'll keep the lock file
+# Cargo.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# LALRPOP generated files
+# Only ignore the generated parser files, not all .rs files
+**/tilt.rs
+
+# Backup files
+*.bak
+*.backup
+*.tmp
+
+# Log files
+*.log
+
+# Test artifacts
+*.profraw
+
+# Documentation build
+/doc/

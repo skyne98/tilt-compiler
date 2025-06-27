@@ -1,0 +1,153 @@
+// ===================================================================
+// FILE: tilt.lalrpop
+//
+// DESC: LALRPOP grammar for the TILT language. This generates a parser
+//       that works with our custom lexer tokens.
+// ===================================================================
+
+use std::str::FromStr;
+use crate::lexer::Token;
+use tilt_ast::*;
+
+grammar<'input>;
+
+// Use our custom lexer tokens
+extern {
+    type Location = usize;
+    type Error = ();
+
+    enum Token<'input> {
+        // Keywords
+        "fn" => Token::Fn,
+        "import" => Token::Import,
+        "ret" => Token::Ret,
+        "br" => Token::Br,
+        "br_if" => Token::BrIf,
+        "phi" => Token::Phi,
+        "call" => Token::Call,
+
+        // Types
+        "i32" => Token::TI32,
+        "i64" => Token::TI64,
+        "f32" => Token::TF32,
+        "f64" => Token::TF64,
+        "void" => Token::TVoid,
+
+        // Punctuation
+        "{" => Token::LBrace,
+        "}" => Token::RBrace,
+        "(" => Token::LParen,
+        ")" => Token::RParen,
+        "[" => Token::LBracket,
+        "]" => Token::RBracket,
+        ":" => Token::Colon,
+        "=" => Token::Equals,
+        "," => Token::Comma,
+        "->" => Token::Arrow,
+
+        // Literals and Identifiers
+        "string" => Token::String(<&'input str>),
+        "number" => Token::Number(<&'input str>),
+        "identifier" => Token::Identifier(<&'input str>),
+    }
+}
+
+// Type parsing
+pub Type: Type = {
+    "i32" => Type::I32,
+    "i64" => Type::I64,
+    "f32" => Type::F32,
+    "f64" => Type::F64,
+    "void" => Type::Void,
+};
+
+// Identifier parsing
+pub Identifier: &'input str = {
+    "identifier" => <>,
+};
+
+// String literal parsing
+pub StringLiteral: &'input str = {
+    "string" => <>,
+};
+
+// Number parsing
+pub NumberLiteral: i64 = {
+    "number" => i64::from_str(<>).unwrap(),
+};
+
+// Typed identifier parsing
+pub TypedIdentifier: TypedIdentifier<'input> = {
+    <name:Identifier> ":" <ty:Type> => TypedIdentifier { name, ty },
+};
+
+// Value parsing
+pub Value: Value<'input> = {
+    <n:NumberLiteral> => Value::Constant(n),
+    <id:Identifier> => Value::Variable(id),
+};
+
+// Simple expression parsing - only handle function calls for now
+pub Expression: Expression<'input> = {
+    // Function calls with parentheses
+    "call" <name:Identifier> "(" ")" => Expression::Call { name, args: Vec::new() },
+    "call" <name:Identifier> "(" <arg:Value> ")" => Expression::Call { name, args: vec![arg] },
+    "call" <name:Identifier> "(" <arg1:Value> "," <arg2:Value> ")" => Expression::Call { name, args: vec![arg1, arg2] },
+};
+
+// Simple instruction parsing - only assignment for now
+pub Instruction: Instruction<'input> = {
+    <dest:TypedIdentifier> "=" <expr:Expression> => Instruction::Assign { dest, expr },
+};
+
+// Simple terminator parsing - no optional value to avoid ambiguity
+pub Terminator: Terminator<'input> = {
+    // Only void return for now
+    "ret" => Terminator::Ret(None),
+    
+    // Branch
+    "br" <label:Identifier> => Terminator::Br { label },
+    
+    // Conditional branch
+    "br_if" <cond:Value> "," <true_label:Identifier> "," <false_label:Identifier> => 
+        Terminator::BrIf { cond, true_label, false_label },
+};
+
+// Block parsing
+pub Block: Block<'input> = {
+    <label:Identifier> ":" <instructions:Instruction*> <terminator:Terminator> => 
+        Block { label, instructions, terminator },
+};
+
+// Simple import declaration parsing
+pub ImportDecl: ImportDecl<'input> = {
+    "import" <module:StringLiteral> <name:StringLiteral> "->" <return_type:Type> => 
+        ImportDecl {
+            module,
+            name,
+            params: Vec::new(),
+            return_type,
+        },
+};
+
+// Simple function definition parsing
+pub FunctionDef: FunctionDef<'input> = {
+    "fn" <name:Identifier> "(" ")" "->" <return_type:Type> "{" <blocks:Block*> "}" => 
+        FunctionDef {
+            name,
+            params: Vec::new(),
+            return_type,
+            blocks,
+        },
+};
+
+// Top-level item parsing
+pub TopLevelItem: TopLevelItem<'input> = {
+    <import:ImportDecl> => TopLevelItem::Import(import),
+    <function:FunctionDef> => TopLevelItem::Function(function),
+};
+
+// Program parsing (root rule)
+pub Program: Program<'input> = {
+    <items:TopLevelItem*> => Program { items },
+};

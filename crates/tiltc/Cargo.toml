@@ -1,0 +1,9 @@
+[package]
+name = "tiltc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tilt-ast = { path = "../tilt-ast" }
+tilt-parser = { path = "../tilt-parser" }
+logos = { workspace = true }
