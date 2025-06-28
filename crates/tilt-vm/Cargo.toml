@@ -1,0 +1,9 @@
+[package]
+name = "tilt-vm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tilt-ir = { path = "../tilt-ir" }
+tilt-ast = { path = "../tilt-ast" }
+tilt-host-abi = { path = "../tilt-host-abi" }

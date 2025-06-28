@@ -806,7 +806,16 @@ dependencies = [
  "target-lexicon",
  "tilt-ast",
  "tilt-ir",
+ "tilt-ir-builder",
  "tilt-parser",
+]
+
+[[package]]
+name = "tilt-host-abi"
+version = "0.1.0"
+dependencies = [
+ "tilt-ast",
+ "tilt-ir",
 ]
 
 [[package]]
@@ -817,6 +826,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tilt-ir-builder"
+version = "0.1.0"
+dependencies = [
+ "cranelift-jit",
+ "cranelift-module",
+ "tilt-ast",
+ "tilt-codegen-cranelift",
+ "tilt-ir",
+]
+
+[[package]]
 name = "tilt-parser"
 version = "0.1.0"
 dependencies = [
@@ -824,6 +844,15 @@ dependencies = [
  "lalrpop-util",
  "logos",
  "tilt-ast",
+]
+
+[[package]]
+name = "tilt-vm"
+version = "0.1.0"
+dependencies = [
+ "tilt-ast",
+ "tilt-host-abi",
+ "tilt-ir",
 ]
 
 [[package]]

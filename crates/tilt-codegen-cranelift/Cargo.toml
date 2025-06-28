@@ -22,4 +22,5 @@ tilt-ast = { path = "../tilt-ast" }
 [dev-dependencies]
 # For testing, we need the parser and lexer
 tilt-parser = { path = "../tilt-parser" }
+tilt-ir-builder = { path = "../tilt-ir-builder" }
 logos = { workspace = true }

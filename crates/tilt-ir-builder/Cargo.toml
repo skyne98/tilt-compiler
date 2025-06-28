@@ -1,0 +1,13 @@
+[package]
+name = "tilt-ir-builder"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tilt-ir = { path = "../tilt-ir" }
+tilt-ast = { path = "../tilt-ast" }
+
+[dev-dependencies]
+tilt-codegen-cranelift = { path = "../tilt-codegen-cranelift" }
+cranelift-jit = "0.121.1"
+cranelift-module = "0.121.1"

@@ -1,0 +1,8 @@
+[package]
+name = "tilt-host-abi"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tilt-ir = { path = "../tilt-ir" }
+tilt-ast = { path = "../tilt-ast" }
