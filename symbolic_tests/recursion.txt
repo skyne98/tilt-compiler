@@ -1,0 +1,2 @@
+Expected Output: 120
+Description: Recursive factorial test - factorial(5) = 5! = 120

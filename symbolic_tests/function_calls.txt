@@ -1,0 +1,2 @@
+Expected Output: 20
+Description: Simple function call test - get_twenty() should return 20

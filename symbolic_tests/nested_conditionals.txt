@@ -1,0 +1,2 @@
+Expected Output: 3
+Description: Nested conditionals test - classify_number function returns 3+1+(-1)+0 = 3

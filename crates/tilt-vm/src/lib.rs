@@ -155,19 +155,19 @@ impl<H: HostABI> VM<H> {
         // Create a new stack frame
         let mut frame = StackFrame::new(name.to_string(), entry_block);
 
-        // Set up parameters in the entry block
-        let entry_block_data = &function.blocks[0];
-        for (i, (param_id, param_type)) in entry_block_data.params.iter().enumerate() {
-            if let Some(arg_value) = args.get(i) {
-                // Type check
-                if arg_value.get_type() != *param_type {
-                    return Err(VMError::TypeMismatch {
-                        expected: *param_type,
-                        actual: arg_value.get_type(),
-                    });
-                }
-                frame.set_value(*param_id, arg_value.clone());
+        // Set up function parameters as the first values in the function scope
+        // Function parameters become ValueId(0), ValueId(1), etc.
+        for (i, (arg_value, param_type)) in args.iter().zip(function.params.iter()).enumerate() {
+            // Type check
+            if arg_value.get_type() != *param_type {
+                return Err(VMError::TypeMismatch {
+                    expected: *param_type,
+                    actual: arg_value.get_type(),
+                });
             }
+            // Parameters start from ValueId(0)
+            let param_id = ValueId(i);
+            frame.set_value(param_id, arg_value.clone());
         }
 
         // Set up constants

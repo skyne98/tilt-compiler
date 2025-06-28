@@ -1,0 +1,13 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+fn main() -> i32 {
+entry:
+    size:i64 = i64.const(4)
+    ptr:ptr = alloc(size)
+    value:i32 = i32.const(42)
+    i32.store(ptr, value)
+    loaded:i32 = i32.load(ptr)
+    free(ptr)
+    ret (loaded)
+}

@@ -1,0 +1,21 @@
+fn max(a:i32, b:i32) -> i32 {
+entry:
+    condition:i32 = i32.lt(a, b)
+    br_if condition, b_greater, a_greater
+
+a_greater:
+    ret (a)
+
+b_greater:
+    ret (b)
+}
+
+fn main() -> i32 {
+entry:
+    val1:i32 = i32.const(10)
+    val2:i32 = i32.const(20)
+    first:i32 = max(val1, val2)
+    val3:i32 = i32.const(5)
+    second:i32 = max(first, val3)
+    ret (second)
+}

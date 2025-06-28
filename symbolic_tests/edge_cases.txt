@@ -1,0 +1,2 @@
+Expected Output: 84
+Description: Edge cases test - 42/1 + 42*0 + 42+0 = 42 + 0 + 42 = 84

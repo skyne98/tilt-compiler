@@ -1,0 +1,19 @@
+fn main() -> i32 {
+entry:
+    zero:i32 = i32.const(0)
+    one:i32 = i32.const(1)
+    fortytwo:i32 = i32.const(42)
+    
+    # Test division by 1
+    div_by_one:i32 = i32.div(fortytwo, one)
+    
+    # Test multiplication by zero
+    mul_by_zero:i32 = i32.mul(fortytwo, zero)
+    
+    # Test addition with zero
+    add_zero:i32 = i32.add(fortytwo, zero)
+    
+    sum1:i32 = i32.add(div_by_one, mul_by_zero)
+    result:i32 = i32.add(sum1, add_zero)
+    ret (result)
+}

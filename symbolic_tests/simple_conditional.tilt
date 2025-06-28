@@ -1,0 +1,15 @@
+fn main() -> i32 {
+entry:
+    x:i32 = i32.const(15)
+    y:i32 = i32.const(10)
+    condition:i32 = i32.lt(y, x)  # y < x means x > y
+    br_if condition, true_block, false_block
+
+true_block:
+    true_result:i32 = i32.const(1)
+    ret (true_result)
+
+false_block:
+    false_result:i32 = i32.const(0)
+    ret (false_result)
+}

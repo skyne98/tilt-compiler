@@ -1,0 +1,27 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+fn main() -> i32 {
+entry:
+    # Test comprehensive memory and arithmetic operations
+    size:i64 = i64.const(4)
+    ptr:ptr = alloc(size)
+    
+    # Store first value
+    val1:i32 = i32.const(100)
+    i32.store(ptr, val1)
+    
+    # Load and modify
+    loaded1:i32 = i32.load(ptr)
+    val2:i32 = i32.const(50)
+    sum:i32 = i32.add(loaded1, val2)
+    
+    # Store back modified value
+    i32.store(ptr, sum)
+    
+    # Load final result
+    final_result:i32 = i32.load(ptr)
+    
+    free(ptr)
+    ret (final_result)
+}

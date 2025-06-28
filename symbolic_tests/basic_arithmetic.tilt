@@ -1,0 +1,13 @@
+fn main() -> i32 {
+entry:
+    a:i32 = i32.const(10)
+    b:i32 = i32.const(5)
+    add_result:i32 = i32.add(a, b)
+    sub_result:i32 = i32.sub(a, b)
+    mul_result:i32 = i32.mul(a, b)
+    div_result:i32 = i32.div(a, b)
+    sum1:i32 = i32.add(add_result, sub_result)
+    sum2:i32 = i32.add(mul_result, div_result)
+    final_result:i32 = i32.add(sum1, sum2)
+    ret (final_result)
+}

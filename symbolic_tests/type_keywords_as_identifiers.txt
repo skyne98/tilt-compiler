@@ -1,0 +1,2 @@
+Expected Output: 300
+Description: Type keywords as identifiers test - using i32, u32 as variable names (100 + 200 = 300)

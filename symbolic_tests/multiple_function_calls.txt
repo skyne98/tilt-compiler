@@ -1,0 +1,2 @@
+Expected Output: 19
+Description: Multiple function calls test - compute(3,4): add(3,4)=7, multiply(3,4)=12, add(7,12)=19

@@ -1,0 +1,49 @@
+fn classify_number(x:i32) -> i32 {
+entry:
+    zero:i32 = i32.const(0)
+    is_positive:i32 = i32.lt(zero, x)  # 0 < x means x > 0
+    br_if is_positive, positive_branch, non_positive_branch
+
+positive_branch:
+    hundred:i32 = i32.const(100)
+    is_large:i32 = i32.lt(hundred, x)  # 100 < x means x > 100
+    br_if is_large, large_positive, small_positive
+
+large_positive:
+    three:i32 = i32.const(3)
+    ret (three)
+
+small_positive:
+    one:i32 = i32.const(1)
+    ret (one)
+
+non_positive_branch:
+    is_negative:i32 = i32.lt(x, zero)  # x < 0
+    br_if is_negative, negative_case, zero_case
+
+negative_case:
+    minus_one:i32 = i32.const(-1)
+    ret (minus_one)
+
+zero_case:
+    zero_val:i32 = i32.const(0)
+    ret (zero_val)
+}
+
+fn main() -> i32 {
+entry:
+    val150:i32 = i32.const(150)
+    a:i32 = classify_number(val150)   # Should return 3
+    val50:i32 = i32.const(50)
+    b:i32 = classify_number(val50)    # Should return 1
+    val_neg10:i32 = i32.const(-10)
+    c:i32 = classify_number(val_neg10) # Should return -1
+    val0:i32 = i32.const(0)
+    d:i32 = classify_number(val0)     # Should return 0
+    
+    # Sum: 3 + 1 + (-1) + 0 = 3
+    sum1:i32 = i32.add(a, b)
+    sum2:i32 = i32.add(c, d)
+    result:i32 = i32.add(sum1, sum2)
+    ret (result)
+}

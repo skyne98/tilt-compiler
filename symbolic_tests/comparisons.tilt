@@ -1,0 +1,15 @@
+fn main() -> i32 {
+entry:
+    a:i32 = i32.const(10)
+    b:i32 = i32.const(5)
+    
+    # Test equality
+    eq_result:i32 = i32.eq(a, a)  # 10 == 10 should be 1
+    
+    # Test less than
+    lt_result:i32 = i32.lt(b, a)  # 5 < 10 should be 1
+    
+    # Add results
+    result:i32 = i32.add(eq_result, lt_result)  # 1 + 1 = 2
+    ret (result)
+}

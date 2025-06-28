@@ -1,0 +1,26 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+fn sum_array() -> i32 {
+entry:
+    size:i64 = i64.const(4)
+    ptr:ptr = alloc(size)
+    
+    # Store values at same memory location (overwrite test)
+    value1:i32 = i32.const(10)
+    value2:i32 = i32.const(20)
+    
+    i32.store(ptr, value1)
+    i32.store(ptr, value2)  # Overwrites value1
+    
+    loaded_value:i32 = i32.load(ptr)
+    free(ptr)
+    
+    ret (loaded_value)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = sum_array()
+    ret (result)
+}

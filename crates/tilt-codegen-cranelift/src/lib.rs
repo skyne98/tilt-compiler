@@ -11,7 +11,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::HashMap;
 use tilt_ast::Type as IRType;
-use tilt_host_abi::{HostABI, RuntimeValue, JITMemoryHostABI};
+use tilt_host_abi::{HostABI, JITMemoryHostABI, RuntimeValue};
 use tilt_ir::{
     BinaryOperator, BlockId, Function as IRFunction, Instruction, Program, Terminator,
     UnaryOperator, ValueId,
@@ -235,10 +235,13 @@ impl<'a> Translator<'a> {
             .ok_or("Entry block not found")?;
 
         // Check if the entry block already has function parameters
-        let entry_block_data = self.tilt_func.blocks.iter()
+        let entry_block_data = self
+            .tilt_func
+            .blocks
+            .iter()
             .find(|b| b.id == self.tilt_func.entry_block)
             .ok_or("Entry block data not found")?;
-        
+
         // If the entry block doesn't have parameters matching the function signature,
         // add them as block parameters (for manually constructed IR)
         if entry_block_data.params.len() != self.tilt_func.params.len() {
@@ -338,29 +341,42 @@ impl<'a> Translator<'a> {
                         IRType::F32 | IRType::F64 => self.builder.ins().fdiv(lhs_val, rhs_val),
                         _ => return Err(format!("Division not supported for type {:?}", ty)),
                     },
-                    BinaryOperator::Eq => self.builder.ins().icmp(IntCC::Equal, lhs_val, rhs_val),
+                    BinaryOperator::Eq => {
+                        let cmp_result = self.builder.ins().icmp(IntCC::Equal, lhs_val, rhs_val);
+                        self.builder.ins().uextend(types::I32, cmp_result)
+                    }
                     BinaryOperator::Ne => {
-                        self.builder.ins().icmp(IntCC::NotEqual, lhs_val, rhs_val)
+                        let cmp_result = self.builder.ins().icmp(IntCC::NotEqual, lhs_val, rhs_val);
+                        self.builder.ins().uextend(types::I32, cmp_result)
                     }
                     BinaryOperator::Lt => {
-                        self.builder
-                            .ins()
-                            .icmp(IntCC::SignedLessThan, lhs_val, rhs_val)
+                        let cmp_result =
+                            self.builder
+                                .ins()
+                                .icmp(IntCC::SignedLessThan, lhs_val, rhs_val);
+                        self.builder.ins().uextend(types::I32, cmp_result)
                     }
                     BinaryOperator::Le => {
-                        self.builder
-                            .ins()
-                            .icmp(IntCC::SignedLessThanOrEqual, lhs_val, rhs_val)
+                        let cmp_result =
+                            self.builder
+                                .ins()
+                                .icmp(IntCC::SignedLessThanOrEqual, lhs_val, rhs_val);
+                        self.builder.ins().uextend(types::I32, cmp_result)
                     }
                     BinaryOperator::Gt => {
-                        self.builder
-                            .ins()
-                            .icmp(IntCC::SignedGreaterThan, lhs_val, rhs_val)
+                        let cmp_result =
+                            self.builder
+                                .ins()
+                                .icmp(IntCC::SignedGreaterThan, lhs_val, rhs_val);
+                        self.builder.ins().uextend(types::I32, cmp_result)
                     }
                     BinaryOperator::Ge => {
-                        self.builder
-                            .ins()
-                            .icmp(IntCC::SignedGreaterThanOrEqual, lhs_val, rhs_val)
+                        let cmp_result = self.builder.ins().icmp(
+                            IntCC::SignedGreaterThanOrEqual,
+                            lhs_val,
+                            rhs_val,
+                        );
+                        self.builder.ins().uextend(types::I32, cmp_result)
                     }
                     _ => return Err(format!("Binary operator {:?} not implemented", op)),
                 };
@@ -408,7 +424,7 @@ impl<'a> Translator<'a> {
                 // Debug: Print the address being stored to
                 // Note: This would require runtime printing which we can't do here
                 // Let's add a comment for now and fix the actual issue
-                
+
                 self.builder.ins().store(MemFlags::new(), val, addr_val, 0);
                 Ok(())
             }
@@ -423,7 +439,7 @@ impl<'a> Translator<'a> {
                 self.value_map.insert(*dest, result);
                 Ok(())
             }
-            
+
             Instruction::PtrAdd { dest, ptr, offset } => {
                 let ptr_val = self.get_value_or_constant(*ptr)?;
                 let offset_val = self.get_value_or_constant(*offset)?;
@@ -432,7 +448,7 @@ impl<'a> Translator<'a> {
                 self.value_map.insert(*dest, result);
                 Ok(())
             }
-            
+
             Instruction::SizeOf { dest, ty } => {
                 let size = match ty {
                     IRType::I32 => 4,
@@ -447,33 +463,41 @@ impl<'a> Translator<'a> {
                 self.value_map.insert(*dest, size_val);
                 Ok(())
             }
-            
+
             Instruction::Alloc { dest, size } => {
                 // Call the host ABI alloc function
                 let size_val = self.get_value_or_constant(*size)?;
-                
+
                 // For now, we'll call a host function - this requires the alloc function to be registered
-                let alloc_func_id = self.function_ids.get("alloc")
+                let alloc_func_id = self
+                    .function_ids
+                    .get("alloc")
                     .copied()
                     .ok_or_else(|| "alloc function not found".to_string())?;
-                
-                let alloc_func_ref = self.module.declare_func_in_func(alloc_func_id, &mut self.builder.func);
+
+                let alloc_func_ref = self
+                    .module
+                    .declare_func_in_func(alloc_func_id, &mut self.builder.func);
                 let call_result = self.builder.ins().call(alloc_func_ref, &[size_val]);
                 let result_val = self.builder.inst_results(call_result)[0];
-                
+
                 self.value_map.insert(*dest, result_val);
                 Ok(())
             }
-            
+
             Instruction::Free { ptr } => {
                 // Call the host ABI free function
                 let ptr_val = self.get_value_or_constant(*ptr)?;
-                
-                let free_func_id = self.function_ids.get("free")
+
+                let free_func_id = self
+                    .function_ids
+                    .get("free")
                     .copied()
                     .ok_or_else(|| "free function not found".to_string())?;
-                
-                let free_func_ref = self.module.declare_func_in_func(free_func_id, &mut self.builder.func);
+
+                let free_func_ref = self
+                    .module
+                    .declare_func_in_func(free_func_id, &mut self.builder.func);
                 self.builder.ins().call(free_func_ref, &[ptr_val]);
                 Ok(())
             }

@@ -1,0 +1,2 @@
+Expected Output: 150
+Description: Comprehensive test - store 100, load, add 50, store 150, load result = 150

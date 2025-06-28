@@ -1,0 +1,2 @@
+Expected Output: 42
+Description: Basic memory operations - alloc, store, load, free with value 42

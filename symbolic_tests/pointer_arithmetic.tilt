@@ -1,0 +1,29 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+fn main() -> i32 {
+entry:
+    size:i64 = i64.const(8)  # Allocate space for 2 i32 values
+    ptr:ptr = alloc(size)
+    
+    # Test pointer arithmetic
+    offset:i64 = i64.const(0)
+    ptr_with_offset:ptr = ptr.add(ptr, offset)
+    
+    first_value:i32 = i32.const(10)
+    i32.store(ptr_with_offset, first_value)
+    
+    # Add offset for second i32
+    offset2:i64 = sizeof.i32()
+    ptr2:ptr = ptr.add(ptr, offset2)
+    second_value:i32 = i32.const(20)
+    i32.store(ptr2, second_value)
+    
+    # Load both values and add them
+    loaded1:i32 = i32.load(ptr)
+    loaded2:i32 = i32.load(ptr2)
+    result:i32 = i32.add(loaded1, loaded2)
+    
+    free(ptr)
+    ret (result)
+}

@@ -1,0 +1,2 @@
+Expected Output: 72
+Description: Basic arithmetic operations (10+5=15, 10-5=5, 10*5=50, 10/5=2, total: 15+5+50+2=72)

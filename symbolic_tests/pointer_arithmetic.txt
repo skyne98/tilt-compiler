@@ -1,0 +1,2 @@
+Expected Output: 30
+Description: Pointer arithmetic test - store 10 at ptr+0, store 20 at ptr+4, load both and add: 10+20=30

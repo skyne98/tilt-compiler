@@ -1,0 +1,7 @@
+fn main() -> i32 {
+entry:
+    i32:i32 = i32.const(100)
+    ptr:i32 = i32.const(200)
+    result:i32 = i32.add(i32, ptr)
+    ret (result)
+}
