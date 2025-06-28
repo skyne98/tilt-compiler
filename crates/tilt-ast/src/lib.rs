@@ -51,16 +51,9 @@ pub enum Instruction<'a> {
         dest: TypedIdentifier<'a>,
         expr: Expression<'a>,
     },
-    // e.g., `i32.store addr, val`
-    Store {
-        op: &'a str, // e.g., "i32.store"
-        address: Value<'a>,
-        value: Value<'a>,
-    },
-    // e.g., `call my_func(arg1)` (no assignment)
-    Call {
-        name: Identifier<'a>,
-        args: Vec<Value<'a>>,
+    // e.g., `i32.store(addr, val)` or `call my_func(arg1)` (expressions used as statements)
+    ExpressionStatement {
+        expr: Expression<'a>,
     },
 }
 

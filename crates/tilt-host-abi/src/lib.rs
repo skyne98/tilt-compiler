@@ -209,6 +209,76 @@ impl MemoryHostABI {
         }
     }
 
+    /// Read bytes from memory at the given address
+    pub fn read_memory(&self, addr: u64, size: usize) -> Result<Vec<u8>, String> {
+        // Find the allocation that contains this address
+        for (base_addr, data) in &self.memory {
+            if addr >= *base_addr && addr + size as u64 <= *base_addr + data.len() as u64 {
+                let offset = (addr - base_addr) as usize;
+                return Ok(data[offset..offset + size].to_vec());
+            }
+        }
+        Err(format!("Invalid memory access at address 0x{:x}", addr))
+    }
+
+    /// Write bytes to memory at the given address
+    pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<(), String> {
+        // Find the allocation that contains this address
+        for (base_addr, memory_data) in &mut self.memory {
+            if addr >= *base_addr && addr + data.len() as u64 <= *base_addr + memory_data.len() as u64 {
+                let offset = (addr - base_addr) as usize;
+                memory_data[offset..offset + data.len()].copy_from_slice(data);
+                return Ok(());
+            }
+        }
+        Err(format!("Invalid memory write at address 0x{:x}", addr))
+    }
+
+    /// Read a typed value from memory
+    pub fn read_value(&self, addr: u64, ty: tilt_ast::Type) -> Result<RuntimeValue, String> {
+        use tilt_ast::Type;
+        match ty {
+            Type::I32 => {
+                let bytes = self.read_memory(addr, 4)?;
+                let value = i32::from_le_bytes(bytes.try_into().unwrap());
+                Ok(RuntimeValue::I32(value))
+            }
+            Type::I64 => {
+                let bytes = self.read_memory(addr, 8)?;
+                let value = i64::from_le_bytes(bytes.try_into().unwrap());
+                Ok(RuntimeValue::I64(value))
+            }
+            Type::F32 => {
+                // For now, treat as i32 since we don't have F32 variant
+                let bytes = self.read_memory(addr, 4)?;
+                let value = i32::from_le_bytes(bytes.try_into().unwrap());
+                Ok(RuntimeValue::I32(value))
+            }
+            Type::F64 => {
+                // For now, treat as i64 since we don't have F64 variant
+                let bytes = self.read_memory(addr, 8)?;
+                let value = i64::from_le_bytes(bytes.try_into().unwrap());
+                Ok(RuntimeValue::I64(value))
+            }
+            Type::Ptr => {
+                let bytes = self.read_memory(addr, 8)?;
+                let value = u64::from_le_bytes(bytes.try_into().unwrap());
+                Ok(RuntimeValue::Ptr(value))
+            }
+            Type::Void => Err("Cannot read void type from memory".to_string()),
+        }
+    }
+
+    /// Write a typed value to memory
+    pub fn write_value(&mut self, addr: u64, value: &RuntimeValue) -> Result<(), String> {
+        match value {
+            RuntimeValue::I32(v) => self.write_memory(addr, &v.to_le_bytes()),
+            RuntimeValue::I64(v) => self.write_memory(addr, &v.to_le_bytes()),
+            RuntimeValue::Ptr(v) => self.write_memory(addr, &v.to_le_bytes()),
+            RuntimeValue::Void => Err("Cannot write void type to memory".to_string()),
+        }
+    }
+
     fn allocate(&mut self, size: u64) -> u64 {
         if size == 0 {
             return 0; // Null pointer for zero-sized allocation

@@ -105,13 +105,10 @@ pub Expression: Expression<'input> = {
     <n:NumberLiteral> => Expression::Constant(n as i32),
 };
 
-// Simple instruction parsing - assignment, call instructions, and memory operations
+// Simple instruction parsing - assignment and expression statements
 pub Instruction: Instruction<'input> = {
     <dest:TypedIdentifier> "=" <expr:Expression> => Instruction::Assign { dest, expr },
-    "call" <name:Identifier> "(" ")" => Instruction::Call { name, args: Vec::new() },
-    "call" <name:Identifier> "(" <args:ArgumentList> ")" => Instruction::Call { name, args },
-    <op:Identifier> <address:Value> "," <value:Value> => Instruction::Store { op, address, value },
-    <op:Identifier> <value:Value> => Instruction::Store { op, address: value, value: Value::Constant(0) },
+    <expr:Expression> => Instruction::ExpressionStatement { expr },
 };
 
 // Simple terminator parsing

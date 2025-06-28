@@ -10,3 +10,5 @@ tilt-ir-builder = { path = "../tilt-ir-builder" }
 tilt-host-abi = { path = "../tilt-host-abi" }
 tilt-vm = { path = "../tilt-vm" }
 tilt-codegen-cranelift = { path = "../tilt-codegen-cranelift" }
+tilt-parser = { path = "../tilt-parser" }
+logos = { workspace = true }

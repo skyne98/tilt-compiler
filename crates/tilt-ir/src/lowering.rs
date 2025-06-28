@@ -5,8 +5,8 @@
 //       and produces validated IR or semantic errors.
 // ===================================================================
 
-use std::collections::HashMap;
 use crate::*;
+use std::collections::HashMap;
 use tilt_ast;
 
 /// Context for lowering AST to IR with semantic validation
@@ -94,7 +94,7 @@ impl LoweringContext {
 /// Main entry point for lowering AST to IR
 pub fn lower_program(ast: &tilt_ast::Program) -> Result<Program, Vec<SemanticError>> {
     let mut ctx = LoweringContext::new();
-    
+
     // First pass: collect all import and function signatures
     for item in &ast.items {
         match item {
@@ -154,7 +154,7 @@ fn lower_import(_ctx: &mut LoweringContext, import: &tilt_ast::ImportDecl) -> Im
 /// Lower a function definition
 fn lower_function(ctx: &mut LoweringContext, func: &tilt_ast::FunctionDef) -> Result<Function, ()> {
     ctx.clear_function_scope();
-    
+
     let mut ir_func = Function::new(
         func.name.to_string(),
         func.params.iter().map(|p| p.ty).collect(),
@@ -215,7 +215,9 @@ fn lower_block(
     func: &mut Function,
     block: &tilt_ast::Block,
 ) -> Result<BasicBlock, ()> {
-    let block_id = ctx.block_map.get(block.label)
+    let block_id = ctx
+        .block_map
+        .get(block.label)
         .copied()
         .expect("Block ID should have been assigned in first pass");
 
@@ -283,13 +285,18 @@ fn lower_instruction(
                         for (arg, expected_type) in args.iter().zip(param_types.iter()) {
                             match arg {
                                 tilt_ast::Value::Variable(var_name) => {
-                                    if let Some((value_id, actual_type)) = ctx.lookup_variable(var_name) {
+                                    if let Some((value_id, actual_type)) =
+                                        ctx.lookup_variable(var_name)
+                                    {
                                         // Type check
                                         if actual_type != *expected_type {
                                             ctx.error(SemanticError::TypeMismatch {
                                                 expected: *expected_type,
                                                 found: actual_type,
-                                                location: format!("argument to function '{}'", name),
+                                                location: format!(
+                                                    "argument to function '{}'",
+                                                    name
+                                                ),
                                             });
                                             return Err(());
                                         }
@@ -305,7 +312,10 @@ fn lower_instruction(
                                 tilt_ast::Value::Constant(const_val) => {
                                     // Create a constant instruction for this argument
                                     let const_value_id = func.next_value();
-                                    func.constants.insert(const_value_id, (*const_val as i64, *expected_type));
+                                    func.constants.insert(
+                                        const_value_id,
+                                        (*const_val as i64, *expected_type),
+                                    );
                                     ir_args.push(const_value_id);
                                 }
                             }
@@ -331,13 +341,16 @@ fn lower_instruction(
                         // ptr.add ptr_val, offset_val
                         if args.len() != 2 {
                             ctx.error(SemanticError::InvalidOperation {
-                                operation: format!("ptr.add with {} arguments (expected 2)", args.len()),
+                                operation: format!(
+                                    "ptr.add with {} arguments (expected 2)",
+                                    args.len()
+                                ),
                                 ty: dest.ty,
                                 location: "ptr.add operation".to_string(),
                             });
                             return Err(());
                         }
-                        
+
                         if dest.ty != Type::Ptr {
                             ctx.error(SemanticError::TypeMismatch {
                                 expected: Type::Ptr,
@@ -347,8 +360,10 @@ fn lower_instruction(
                             return Err(());
                         }
 
-                        let (ptr_id, ptr_type) = lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
-                        let (offset_id, offset_type) = lower_value_with_func(ctx, func, &args[1], Type::I64)?;
+                        let (ptr_id, ptr_type) =
+                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                        let (offset_id, offset_type) =
+                            lower_value_with_func(ctx, func, &args[1], Type::I64)?;
 
                         if ptr_type != Type::Ptr {
                             ctx.error(SemanticError::TypeMismatch {
@@ -376,7 +391,10 @@ fn lower_instruction(
                         // sizeof.i32, sizeof.i64, etc.
                         if !args.is_empty() {
                             ctx.error(SemanticError::InvalidOperation {
-                                operation: format!("sizeof with {} arguments (expected 0)", args.len()),
+                                operation: format!(
+                                    "sizeof with {} arguments (expected 0)",
+                                    args.len()
+                                ),
                                 ty: dest.ty,
                                 location: "sizeof operation".to_string(),
                             });
@@ -418,7 +436,10 @@ fn lower_instruction(
                         // alloc size_val
                         if args.len() != 1 {
                             ctx.error(SemanticError::InvalidOperation {
-                                operation: format!("alloc with {} arguments (expected 1)", args.len()),
+                                operation: format!(
+                                    "alloc with {} arguments (expected 1)",
+                                    args.len()
+                                ),
                                 ty: dest.ty,
                                 location: "alloc operation".to_string(),
                             });
@@ -434,7 +455,8 @@ fn lower_instruction(
                             return Err(());
                         }
 
-                        let (size_id, size_type) = lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+                        let (size_id, size_type) =
+                            lower_value_with_func(ctx, func, &args[0], Type::I64)?;
 
                         if size_type != Type::I64 {
                             ctx.error(SemanticError::TypeMismatch {
@@ -476,7 +498,11 @@ fn lower_instruction(
                         if op_part == "load" {
                             if args.len() != 1 {
                                 ctx.error(SemanticError::InvalidOperation {
-                                    operation: format!("{}.load with {} arguments (expected 1)", type_part, args.len()),
+                                    operation: format!(
+                                        "{}.load with {} arguments (expected 1)",
+                                        type_part,
+                                        args.len()
+                                    ),
                                     ty: dest.ty,
                                     location: "load operation".to_string(),
                                 });
@@ -492,7 +518,8 @@ fn lower_instruction(
                                 return Err(());
                             }
 
-                            let (addr_id, addr_type) = lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                            let (addr_id, addr_type) =
+                                lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
 
                             if addr_type != Type::Ptr {
                                 ctx.error(SemanticError::TypeMismatch {
@@ -522,11 +549,13 @@ fn lower_instruction(
 
                         if args.len() == 2 {
                             // Binary operation
-                            let binary_op = BinaryOperator::from_str(op_part, ty)
-                                .map_err(|e| ctx.error(e))?;
+                            let binary_op =
+                                BinaryOperator::from_str(op_part, ty).map_err(|e| ctx.error(e))?;
 
-                            let (lhs_id, lhs_type) = lower_value_with_func(ctx, func, &args[0], ty)?;
-                            let (rhs_id, rhs_type) = lower_value_with_func(ctx, func, &args[1], ty)?;
+                            let (lhs_id, lhs_type) =
+                                lower_value_with_func(ctx, func, &args[0], ty)?;
+                            let (rhs_id, rhs_type) =
+                                lower_value_with_func(ctx, func, &args[1], ty)?;
 
                             // Type check operands
                             if lhs_type != ty {
@@ -565,7 +594,10 @@ fn lower_instruction(
                                     })
                                 } else {
                                     ctx.error(SemanticError::InvalidOperation {
-                                        operation: format!("{}.const requires a constant value", type_part),
+                                        operation: format!(
+                                            "{}.const requires a constant value",
+                                            type_part
+                                        ),
                                         ty,
                                         location: "constant operation".to_string(),
                                     });
@@ -576,7 +608,8 @@ fn lower_instruction(
                                 let unary_op = UnaryOperator::from_str(op_part, ty)
                                     .map_err(|e| ctx.error(e))?;
 
-                                let (operand_id, operand_type) = lower_value_with_func(ctx, func, &args[0], ty)?;
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], ty)?;
 
                                 if operand_type != ty {
                                     ctx.error(SemanticError::TypeMismatch {
@@ -631,158 +664,188 @@ fn lower_instruction(
                 }
             }
         }
-        tilt_ast::Instruction::Call { name, args } => {
-            // Void function call
-            if let Some((param_types, return_type)) = ctx.lookup_function(name).cloned() {
-                // Check that this is actually a void function
-                if return_type != Type::Void {
-                    ctx.error(SemanticError::TypeMismatch {
-                        expected: Type::Void,
-                        found: return_type,
-                        location: format!("void call to function '{}'", name),
-                    });
-                    return Err(());
-                }
+        tilt_ast::Instruction::ExpressionStatement { expr } => {
+            // Handle expressions used as statements (void expressions)
+            match expr {
+                tilt_ast::Expression::Call { name, args } => {
+                    // Void function call
+                    if let Some((param_types, return_type)) = ctx.lookup_function(name).cloned() {
+                        // Check that this is actually a void function
+                        if return_type != Type::Void {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Void,
+                                found: return_type,
+                                location: format!("void call to function '{}'", name),
+                            });
+                            return Err(());
+                        }
 
-                // Check argument count
-                if args.len() != param_types.len() {
-                    ctx.error(SemanticError::ArgumentMismatch {
-                        function: name.to_string(),
-                        expected: param_types.len(),
-                        found: args.len(),
-                        location: "void function call".to_string(),
-                    });
-                    return Err(());
-                }
+                        // Check argument count
+                        if args.len() != param_types.len() {
+                            ctx.error(SemanticError::ArgumentMismatch {
+                                function: name.to_string(),
+                                expected: param_types.len(),
+                                found: args.len(),
+                                location: "void function call".to_string(),
+                            });
+                            return Err(());
+                        }
 
-                // Lower arguments
-                let mut ir_args = Vec::new();
-                for (arg, expected_type) in args.iter().zip(param_types.iter()) {
-                    match arg {
-                        tilt_ast::Value::Variable(var_name) => {
-                            if let Some((value_id, actual_type)) = ctx.lookup_variable(var_name) {
-                                if actual_type != *expected_type {
-                                    ctx.error(SemanticError::TypeMismatch {
-                                        expected: *expected_type,
-                                        found: actual_type,
-                                        location: format!("argument to function '{}'", name),
-                                    });
-                                    return Err(());
+                        // Lower arguments
+                        let mut ir_args = Vec::new();
+                        for (arg, expected_type) in args.iter().zip(param_types.iter()) {
+                            match arg {
+                                tilt_ast::Value::Variable(var_name) => {
+                                    if let Some((value_id, actual_type)) =
+                                        ctx.lookup_variable(var_name)
+                                    {
+                                        if actual_type != *expected_type {
+                                            ctx.error(SemanticError::TypeMismatch {
+                                                expected: *expected_type,
+                                                found: actual_type,
+                                                location: format!(
+                                                    "argument to function '{}'",
+                                                    name
+                                                ),
+                                            });
+                                            return Err(());
+                                        }
+                                        ir_args.push(value_id);
+                                    } else {
+                                        ctx.error(SemanticError::UndefinedIdentifier {
+                                            name: var_name.to_string(),
+                                            location: format!("argument to function '{}'", name),
+                                        });
+                                        return Err(());
+                                    }
                                 }
-                                ir_args.push(value_id);
-                            } else {
-                                ctx.error(SemanticError::UndefinedIdentifier {
-                                    name: var_name.to_string(),
-                                    location: format!("argument to function '{}'", name),
-                                });
-                                return Err(());
+                                tilt_ast::Value::Constant(const_val) => {
+                                    // Create a constant instruction for this argument
+                                    let const_value_id = func.next_value();
+                                    func.constants.insert(
+                                        const_value_id,
+                                        (*const_val as i64, *expected_type),
+                                    );
+                                    ir_args.push(const_value_id);
+                                }
                             }
                         }
-                        tilt_ast::Value::Constant(const_val) => {
-                            // Create a constant instruction for this argument
-                            let const_value_id = func.next_value();
-                            func.constants.insert(const_value_id, (*const_val as i64, *expected_type));
-                            ir_args.push(const_value_id);
-                        }
+
+                        Ok(Instruction::CallVoid {
+                            function: name.to_string(),
+                            args: ir_args,
+                        })
+                    } else {
+                        ctx.error(SemanticError::FunctionNotFound {
+                            name: name.to_string(),
+                            location: "void function call".to_string(),
+                        });
+                        Err(())
                     }
                 }
+                tilt_ast::Expression::Operation { op, args } => {
+                    // Handle operations that return void (e.g., store, free)
+                    // Handle operations that return void (e.g., store, free)
+                    if op.ends_with(".store") {
+                        if args.len() != 2 {
+                            ctx.error(SemanticError::ArgumentMismatch {
+                                function: op.to_string(),
+                                expected: 2,
+                                found: args.len(),
+                                location: "store operation".to_string(),
+                            });
+                            return Err(());
+                        }
 
-                Ok(Instruction::CallVoid {
-                    function: name.to_string(),
-                    args: ir_args,
-                })
-            } else {
-                ctx.error(SemanticError::FunctionNotFound {
-                    name: name.to_string(),
-                    location: "void function call".to_string(),
-                });
-                Err(())
-            }
-        }
-        tilt_ast::Instruction::Store { op, address, value } => {
-            // Handle free operation first
-            if *op == "free" {
-                let (ptr_id, ptr_type) = lower_value_with_func(ctx, func, address, Type::Ptr)?;
-                
-                if ptr_type != Type::Ptr {
-                    ctx.error(SemanticError::TypeMismatch {
-                        expected: Type::Ptr,
-                        found: ptr_type,
-                        location: "free pointer operand".to_string(),
-                    });
-                    return Err(());
-                }
+                        let (ptr_value, ptr_type) =
+                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
 
-                return Ok(Instruction::Free {
-                    ptr: ptr_id,
-                });
-            }
+                        if ptr_type != Type::Ptr {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Ptr,
+                                found: ptr_type,
+                                location: format!("first argument to '{}'", op),
+                            });
+                            return Err(());
+                        }
 
-            // Parse store operation (e.g., "i32.store")
-            if let Some(dot_pos) = op.find('.') {
-                let type_part = &op[..dot_pos];
-                let op_part = &op[dot_pos + 1..];
+                        let store_type = if *op == "i32.store" {
+                            Type::I32
+                        } else if *op == "i64.store" {
+                            Type::I64
+                        } else if *op == "f32.store" {
+                            Type::F32
+                        } else if *op == "f64.store" {
+                            Type::F64
+                        } else if *op == "ptr.store" {
+                            Type::Ptr
+                        } else {
+                            ctx.error(SemanticError::InvalidOperation {
+                                operation: op.to_string(),
+                                ty: Type::Void,
+                                location: "store operation".to_string(),
+                            });
+                            return Err(());
+                        };
 
-                if op_part != "store" {
-                    ctx.error(SemanticError::InvalidOperation {
-                        operation: op.to_string(),
-                        ty: Type::Void, // Store doesn't have a type
-                        location: "store instruction".to_string(),
-                    });
-                    return Err(());
-                }
+                        let (value_id, value_type) =
+                            lower_value_with_func(ctx, func, &args[1], store_type)?;
 
-                let ty = match type_part {
-                    "i32" => Type::I32,
-                    "i64" => Type::I64,
-                    "f32" => Type::F32,
-                    "f64" => Type::F64,
-                    "ptr" => Type::Ptr,
-                    _ => {
+                        if value_type != store_type {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: store_type,
+                                found: value_type,
+                                location: format!("second argument to '{}'", op),
+                            });
+                            return Err(());
+                        }
+
+                        Ok(Instruction::Store {
+                            address: ptr_value,
+                            value: value_id,
+                            ty: store_type,
+                        })
+                    } else if *op == "free" {
+                        if args.len() != 1 {
+                            ctx.error(SemanticError::ArgumentMismatch {
+                                function: op.to_string(),
+                                expected: 1,
+                                found: args.len(),
+                                location: "free operation".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        let (ptr_value, ptr_type) =
+                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+
+                        if ptr_type != Type::Ptr {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Ptr,
+                                found: ptr_type,
+                                location: "argument to 'free'".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        Ok(Instruction::Free { ptr: ptr_value })
+                    } else {
                         ctx.error(SemanticError::InvalidOperation {
                             operation: op.to_string(),
                             ty: Type::Void,
-                            location: "store instruction".to_string(),
+                            location: "void operation".to_string(),
                         });
-                        return Err(());
+                        Err(())
                     }
-                };
-
-                let (addr_id, addr_type) = lower_value_with_func(ctx, func, address, Type::Ptr)?;
-                let (val_id, val_type) = lower_value_with_func(ctx, func, value, ty)?;
-
-                // Check that address type is pointer
-                if addr_type != Type::Ptr {
-                    ctx.error(SemanticError::TypeMismatch {
-                        expected: Type::Ptr,
-                        found: addr_type,
-                        location: "store address".to_string(),
-                    });
-                    return Err(());
                 }
-
-                // Check that value type matches store type
-                if val_type != ty {
-                    ctx.error(SemanticError::TypeMismatch {
-                        expected: ty,
-                        found: val_type,
-                        location: "store value".to_string(),
+                _ => {
+                    ctx.error(SemanticError::InvalidOperation {
+                        operation: "unknown".to_string(),
+                        ty: Type::Void,
+                        location: "expression statement".to_string(),
                     });
-                    return Err(());
+                    Err(())
                 }
-
-                Ok(Instruction::Store {
-                    address: addr_id,
-                    value: val_id,
-                    ty,
-                })
-            } else {
-                ctx.error(SemanticError::InvalidOperation {
-                    operation: op.to_string(),
-                    ty: Type::Void,
-                    location: "store instruction".to_string(),
-                });
-                Err(())
             }
         }
     }
@@ -803,9 +866,10 @@ fn lower_terminator(
                 } else {
                     Type::I32 // Default fallback
                 };
-                
-                let (value_id, value_type) = lower_value_with_func(ctx, func, value, expected_type)?;
-                
+
+                let (value_id, value_type) =
+                    lower_value_with_func(ctx, func, value, expected_type)?;
+
                 // Check that return type matches function return type
                 if let Some(current_func) = &ctx.current_function {
                     if value_type != current_func.return_type {
@@ -848,7 +912,11 @@ fn lower_terminator(
                 Err(())
             }
         }
-        tilt_ast::Terminator::BrIf { cond, true_label, false_label } => {
+        tilt_ast::Terminator::BrIf {
+            cond,
+            true_label,
+            false_label,
+        } => {
             let (cond_id, cond_type) = lower_value_with_func(ctx, func, cond, Type::I32)?;
 
             // Check that condition is an integer type
@@ -897,10 +965,7 @@ fn lower_terminator(
 
 /// Lower a value (variable reference or constant)
 #[allow(dead_code)]
-fn lower_value(
-    ctx: &mut LoweringContext,
-    value: &tilt_ast::Value,
-) -> Result<(ValueId, Type), ()> {
+fn lower_value(ctx: &mut LoweringContext, value: &tilt_ast::Value) -> Result<(ValueId, Type), ()> {
     match value {
         tilt_ast::Value::Variable(name) => {
             if let Some((value_id, ty)) = ctx.lookup_variable(name) {
@@ -947,10 +1012,9 @@ fn lower_value_with_func(
         tilt_ast::Value::Constant(const_val) => {
             // Create a constant instruction for this value
             let const_value_id = func.next_value();
-            func.constants.insert(const_value_id, (*const_val as i64, expected_type));
+            func.constants
+                .insert(const_value_id, (*const_val as i64, expected_type));
             Ok((const_value_id, expected_type))
         }
     }
 }
-
-

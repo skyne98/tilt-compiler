@@ -823,11 +823,13 @@ dependencies = [
 name = "tilt-integration-tests"
 version = "0.1.0"
 dependencies = [
+ "logos",
  "tilt-ast",
  "tilt-codegen-cranelift",
  "tilt-host-abi",
  "tilt-ir",
  "tilt-ir-builder",
+ "tilt-parser",
  "tilt-vm",
 ]
 

@@ -7,7 +7,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::{lowering::lower_program, SemanticError, ValueId, BlockId};
+    use crate::{BlockId, SemanticError, ValueId, lowering::lower_program};
     use tilt_ast::*;
 
     fn create_test_program(items: Vec<TopLevelItem>) -> Program {
@@ -33,7 +33,7 @@ mod tests {
         };
         let ast = create_test_program(vec![TopLevelItem::Import(import)]);
         let result = lower_program(&ast).unwrap();
-        
+
         assert_eq!(result.imports.len(), 1);
         assert_eq!(result.imports[0].module, "env");
         assert_eq!(result.imports[0].name, "print");
@@ -54,7 +54,7 @@ mod tests {
         };
         let ast = create_test_program(vec![TopLevelItem::Function(function)]);
         let result = lower_program(&ast).unwrap();
-        
+
         assert_eq!(result.functions.len(), 1);
         assert_eq!(result.functions[0].name, "main");
         assert_eq!(result.functions[0].return_type, Type::Void);
@@ -95,11 +95,17 @@ mod tests {
             TopLevelItem::Function(function),
         ]);
         let result = lower_program(&ast).unwrap();
-        
+
         assert_eq!(result.functions.len(), 1);
         assert_eq!(result.functions[0].blocks[0].instructions.len(), 1);
-        
-        if let crate::Instruction::Call { dest, function, return_type, .. } = &result.functions[0].blocks[0].instructions[0] {
+
+        if let crate::Instruction::Call {
+            dest,
+            function,
+            return_type,
+            ..
+        } = &result.functions[0].blocks[0].instructions[0]
+        {
             assert_eq!(*dest, ValueId(0));
             assert_eq!(function, "getc");
             assert_eq!(*return_type, Type::I32);
@@ -123,9 +129,11 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
-                instructions: vec![Instruction::Call {
-                    name: "putc",
-                    args: vec![],
+                instructions: vec![Instruction::ExpressionStatement {
+                    expr: Expression::Call {
+                        name: "putc",
+                        args: vec![],
+                    },
                 }],
                 terminator: Terminator::Ret(None),
             }],
@@ -135,10 +143,12 @@ mod tests {
             TopLevelItem::Function(function),
         ]);
         let result = lower_program(&ast).unwrap();
-        
+
         assert_eq!(result.functions[0].blocks[0].instructions.len(), 1);
-        
-        if let crate::Instruction::CallVoid { function, .. } = &result.functions[0].blocks[0].instructions[0] {
+
+        if let crate::Instruction::CallVoid { function, .. } =
+            &result.functions[0].blocks[0].instructions[0]
+        {
             assert_eq!(function, "putc");
         } else {
             panic!("Expected CallVoid instruction");
@@ -166,9 +176,9 @@ mod tests {
         };
         let ast = create_test_program(vec![TopLevelItem::Function(function)]);
         let result = lower_program(&ast).unwrap();
-        
+
         assert_eq!(result.functions[0].blocks.len(), 2);
-        
+
         if let crate::Terminator::Br { target } = &result.functions[0].blocks[0].terminator {
             assert_eq!(*target, BlockId(1)); // Should point to second block
         } else {
@@ -200,7 +210,7 @@ mod tests {
         };
         let ast = create_test_program(vec![TopLevelItem::Function(function)]);
         let result = lower_program(&ast);
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 1);
@@ -240,7 +250,7 @@ mod tests {
             TopLevelItem::Function(function),
         ]);
         let result = lower_program(&ast);
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 1);
@@ -256,12 +266,14 @@ mod tests {
             blocks: vec![Block {
                 label: "entry",
                 instructions: vec![],
-                terminator: Terminator::Br { label: "undefined_block" },
+                terminator: Terminator::Br {
+                    label: "undefined_block",
+                },
             }],
         };
         let ast = create_test_program(vec![TopLevelItem::Function(function)]);
         let result = lower_program(&ast);
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 1);
@@ -295,11 +307,15 @@ mod tests {
             TopLevelItem::Function(func2),
         ]);
         let result = lower_program(&ast);
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         // Should have at least one duplicate definition error
-        assert!(errors.iter().any(|e| matches!(e, SemanticError::DuplicateDefinition { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, SemanticError::DuplicateDefinition { .. }))
+        );
     }
 
     #[test]
@@ -316,7 +332,7 @@ mod tests {
         };
         let ast = create_test_program(vec![TopLevelItem::Function(function)]);
         let result = lower_program(&ast);
-        
+
         assert!(result.is_err());
         let errors = result.unwrap_err();
         assert_eq!(errors.len(), 1);
@@ -326,7 +342,7 @@ mod tests {
 
 #[cfg(test)]
 mod integration_tests {
-    use crate::{lowering::lower_program, SemanticError};
+    use crate::{SemanticError, lowering::lower_program};
     use tilt_ast::*;
 
     #[test]
@@ -384,10 +400,14 @@ mod integration_tests {
         };
 
         let result = lower_program(&ast);
-        
+
         // This should fail because we're using an undefined variable 'x' in return
         assert!(result.is_err());
         let errors = result.unwrap_err();
-        assert!(errors.iter().any(|e| matches!(e, SemanticError::UndefinedIdentifier { .. })));
+        assert!(
+            errors
+                .iter()
+                .any(|e| matches!(e, SemanticError::UndefinedIdentifier { .. }))
+        );
     }
 }
