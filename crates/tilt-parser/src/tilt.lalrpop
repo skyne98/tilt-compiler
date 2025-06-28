@@ -83,37 +83,41 @@ pub TypedIdentifier: TypedIdentifier<'input> = {
 
 // Value parsing
 pub Value: Value<'input> = {
-    <n:NumberLiteral> => Value::Constant(n),
+    <n:NumberLiteral> => Value::Constant(n as i32),
     <id:Identifier> => Value::Variable(id),
 };
 
-// Simple expression parsing - only handle function calls for now
+// Simple expression parsing - handle function calls and constants
 pub Expression: Expression<'input> = {
     // Function calls with parentheses
     "call" <name:Identifier> "(" ")" => Expression::Call { name, args: Vec::new() },
-    "call" <name:Identifier> "(" <arg:Value> ")" => Expression::Call { name, args: vec![arg] },
-    "call" <name:Identifier> "(" <arg1:Value> "," <arg2:Value> ")" => Expression::Call { name, args: vec![arg1, arg2] },
+    "call" <name:Identifier> "(" <args:ArgumentList> ")" => Expression::Call { name, args },
+    
+    // Constant values as direct constants
+    <n:NumberLiteral> => Expression::Constant(n as i32),
 };
 
 // Simple instruction parsing - assignment and call instructions
 pub Instruction: Instruction<'input> = {
     <dest:TypedIdentifier> "=" <expr:Expression> => Instruction::Assign { dest, expr },
     "call" <name:Identifier> "(" ")" => Instruction::Call { name, args: Vec::new() },
-    "call" <name:Identifier> "(" <arg:Value> ")" => Instruction::Call { name, args: vec![arg] },
-    "call" <name:Identifier> "(" <arg1:Value> "," <arg2:Value> ")" => Instruction::Call { name, args: vec![arg1, arg2] },
+    "call" <name:Identifier> "(" <args:ArgumentList> ")" => Instruction::Call { name, args },
 };
 
-// Simple terminator parsing - no optional value to avoid ambiguity
+// Simple terminator parsing
 pub Terminator: Terminator<'input> = {
-    // Only void return for now
-    "ret" => Terminator::Ret(None),
-    
     // Branch
     "br" <label:Identifier> => Terminator::Br { label },
     
     // Conditional branch
     "br_if" <cond:Value> "," <true_label:Identifier> "," <false_label:Identifier> => 
         Terminator::BrIf { cond, true_label, false_label },
+        
+    // Return with value using parentheses to make it unambiguous
+    "ret" "(" <value:Value> ")" => Terminator::Ret(Some(value)),
+    
+    // Void return
+    "ret" => Terminator::Ret(None),
 };
 
 // Block parsing
@@ -175,5 +179,14 @@ pub ParameterList: Vec<TypedIdentifier<'input>> = {
     <mut params:ParameterList> "," <param:TypedIdentifier> => {
         params.push(param);
         params
+    },
+};
+
+// Argument list for function calls
+pub ArgumentList: Vec<Value<'input>> = {
+    <arg:Value> => vec![arg],
+    <mut args:ArgumentList> "," <arg:Value> => {
+        args.push(arg);
+        args
     },
 };

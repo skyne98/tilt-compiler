@@ -802,9 +802,11 @@ dependencies = [
  "cranelift-frontend",
  "cranelift-jit",
  "cranelift-module",
+ "logos",
  "target-lexicon",
  "tilt-ast",
  "tilt-ir",
+ "tilt-parser",
 ]
 
 [[package]]

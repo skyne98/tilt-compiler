@@ -16,6 +16,9 @@ use tilt_ir::{
     UnaryOperator, ValueId,
 };
 
+#[cfg(test)]
+mod tests;
+
 pub struct JIT {
     /// The main JIT module, which manages function compilation and linking.
     module: JITModule,
@@ -33,6 +36,54 @@ impl JIT {
         builder.symbol("print_hello", host_print_hello as *const u8);
         builder.symbol("print_char", host_print_char as *const u8);
         builder.symbol("getc", host_getc as *const u8);
+        
+        // Arithmetic operators
+        builder.symbol("add", host_add as *const u8);
+        builder.symbol("sub", host_sub as *const u8);
+        builder.symbol("mul", host_mul as *const u8);
+        builder.symbol("div", host_div as *const u8);
+        builder.symbol("mod", host_mod as *const u8);
+        
+        // Comparison operators
+        builder.symbol("eq", host_eq as *const u8);
+        builder.symbol("ne", host_ne as *const u8);
+        builder.symbol("lt", host_lt as *const u8);
+        builder.symbol("le", host_le as *const u8);
+        builder.symbol("gt", host_gt as *const u8);
+        builder.symbol("ge", host_ge as *const u8);
+        
+        // Logical operators
+        builder.symbol("and", host_and as *const u8);
+        builder.symbol("or", host_or as *const u8);
+        builder.symbol("not", host_not as *const u8);
+        
+        // Bitwise operators
+        builder.symbol("bitand", host_bitand as *const u8);
+        builder.symbol("bitor", host_bitor as *const u8);
+        builder.symbol("bitxor", host_bitxor as *const u8);
+        builder.symbol("bitnot", host_bitnot as *const u8);
+        builder.symbol("shl", host_shl as *const u8);
+        builder.symbol("shr", host_shr as *const u8);
+        builder.symbol("add", host_add as *const u8);
+        builder.symbol("sub", host_sub as *const u8);
+        builder.symbol("mul", host_mul as *const u8);
+        builder.symbol("div", host_div as *const u8);
+        builder.symbol("mod", host_mod as *const u8);
+        builder.symbol("eq", host_eq as *const u8);
+        builder.symbol("ne", host_ne as *const u8);
+        builder.symbol("lt", host_lt as *const u8);
+        builder.symbol("le", host_le as *const u8);
+        builder.symbol("gt", host_gt as *const u8);
+        builder.symbol("ge", host_ge as *const u8);
+        builder.symbol("and", host_and as *const u8);
+        builder.symbol("or", host_or as *const u8);
+        builder.symbol("not", host_not as *const u8);
+        builder.symbol("bitand", host_bitand as *const u8);
+        builder.symbol("bitor", host_bitor as *const u8);
+        builder.symbol("bitxor", host_bitxor as *const u8);
+        builder.symbol("bitnot", host_bitnot as *const u8);
+        builder.symbol("shl", host_shl as *const u8);
+        builder.symbol("shr", host_shr as *const u8);
 
         // Create the JIT module.
         let module = JITModule::new(builder);
@@ -466,10 +517,14 @@ fn host_print_hello() {
 }
 
 fn host_print_char(c: i32) {
-    if let Some(ch) = char::from_u32(c as u32) {
-        print!("{}", ch);
+    // Convert i32 to ASCII character
+    // For 0-9, convert to ASCII digits; for other values, use as ASCII codes
+    if c >= 0 && c <= 9 {
+        print!("{}", (c + 48) as u8 as char); // Convert digit to ASCII ('0' = 48, '1' = 49, etc.)
+    } else if c >= 32 && c <= 126 {
+        print!("{}", c as u8 as char); // Printable ASCII range
     } else {
-        print!("?");
+        print!("?"); // Non-printable
     }
     std::io::Write::flush(&mut std::io::stdout()).ok();
 }
@@ -478,4 +533,96 @@ fn host_getc() -> i32 {
     // For testing, return a fixed value
     // In a real implementation, this would read from stdin
     65 // ASCII 'A'
+}
+
+// Arithmetic operators
+fn host_add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn host_sub(a: i32, b: i32) -> i32 {
+    a - b
+}
+
+fn host_mul(a: i32, b: i32) -> i32 {
+    a * b
+}
+
+fn host_div(a: i32, b: i32) -> i32 {
+    if b == 0 {
+        0 // Avoid division by zero
+    } else {
+        a / b
+    }
+}
+
+fn host_mod(a: i32, b: i32) -> i32 {
+    if b == 0 {
+        0 // Avoid division by zero
+    } else {
+        a % b
+    }
+}
+
+// Comparison operators (return i32 instead of bool for ABI compatibility)
+fn host_eq(a: i32, b: i32) -> i32 {
+    if a == b { 1 } else { 0 }
+}
+
+fn host_ne(a: i32, b: i32) -> i32 {
+    if a != b { 1 } else { 0 }
+}
+
+fn host_lt(a: i32, b: i32) -> i32 {
+    if a < b { 1 } else { 0 }
+}
+
+fn host_le(a: i32, b: i32) -> i32 {
+    if a <= b { 1 } else { 0 }
+}
+
+fn host_gt(a: i32, b: i32) -> i32 {
+    if a > b { 1 } else { 0 }
+}
+
+fn host_ge(a: i32, b: i32) -> i32 {
+    if a >= b { 1 } else { 0 }
+}
+
+// Logical operators (operate on i32 values, 0 = false, non-zero = true)
+fn host_and(a: i32, b: i32) -> i32 {
+    if a != 0 && b != 0 { 1 } else { 0 }
+}
+
+fn host_or(a: i32, b: i32) -> i32 {
+    if a != 0 || b != 0 { 1 } else { 0 }
+}
+
+fn host_not(a: i32) -> i32 {
+    if a == 0 { 1 } else { 0 }
+}
+
+// Bitwise operators
+fn host_bitand(a: i32, b: i32) -> i32 {
+    a & b
+}
+
+fn host_bitor(a: i32, b: i32) -> i32 {
+    a | b
+}
+
+fn host_bitxor(a: i32, b: i32) -> i32 {
+    a ^ b
+}
+
+fn host_bitnot(a: i32) -> i32 {
+    !a
+}
+
+fn host_shl(a: i32, b: i32) -> i32 {
+    a << b
+}
+
+fn host_shr(a: i32, b: i32) -> i32 {
+    a >> b
 }

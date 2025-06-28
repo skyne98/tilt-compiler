@@ -1,0 +1,14 @@
+import "env" "print_char" (c:i32) -> void
+import "env" "eq" (a:i32, b:i32) -> i32
+
+fn main() -> void {
+entry:
+    # Debug: print just '0' (ASCII 48)
+    call print_char(48)
+    
+    # Debug: test comparison and print result
+    eq_result:i32 = call eq(5, 5)
+    call print_char(eq_result)
+    
+    ret
+}

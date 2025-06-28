@@ -304,7 +304,7 @@ fn lower_instruction(
                                 tilt_ast::Value::Constant(const_val) => {
                                     // Create a constant instruction for this argument
                                     let const_value_id = func.next_value();
-                                    func.constants.insert(const_value_id, (*const_val, *expected_type));
+                                    func.constants.insert(const_value_id, (*const_val as i64, *expected_type));
                                     ir_args.push(const_value_id);
                                 }
                             }
@@ -360,8 +360,8 @@ fn lower_instruction(
                             let binary_op = BinaryOperator::from_str(op_part, ty)
                                 .map_err(|e| ctx.error(e))?;
 
-                            let (lhs_id, lhs_type) = lower_value(ctx, &args[0])?;
-                            let (rhs_id, rhs_type) = lower_value(ctx, &args[1])?;
+                            let (lhs_id, lhs_type) = lower_value_with_func(ctx, func, &args[0], ty)?;
+                            let (rhs_id, rhs_type) = lower_value_with_func(ctx, func, &args[1], ty)?;
 
                             // Type check operands
                             if lhs_type != ty {
@@ -395,7 +395,7 @@ fn lower_instruction(
                                 if let tilt_ast::Value::Constant(val) = &args[0] {
                                     Ok(Instruction::Const {
                                         dest: dest_value_id,
-                                        value: *val,
+                                        value: *val as i64,
                                         ty,
                                     })
                                 } else {
@@ -411,7 +411,7 @@ fn lower_instruction(
                                 let unary_op = UnaryOperator::from_str(op_part, ty)
                                     .map_err(|e| ctx.error(e))?;
 
-                                let (operand_id, operand_type) = lower_value(ctx, &args[0])?;
+                                let (operand_id, operand_type) = lower_value_with_func(ctx, func, &args[0], ty)?;
 
                                 if operand_type != ty {
                                     ctx.error(SemanticError::TypeMismatch {
@@ -445,6 +445,14 @@ fn lower_instruction(
                         });
                         Err(())
                     }
+                }
+                tilt_ast::Expression::Constant(value) => {
+                    // Direct constant assignment
+                    Ok(Instruction::Const {
+                        dest: dest_value_id,
+                        value: *value as i64,
+                        ty: dest.ty,
+                    })
                 }
                 tilt_ast::Expression::Phi { nodes: _ } => {
                     // Phi nodes are handled as block parameters in our IR
@@ -508,7 +516,7 @@ fn lower_instruction(
                         tilt_ast::Value::Constant(const_val) => {
                             // Create a constant instruction for this argument
                             let const_value_id = func.next_value();
-                            func.constants.insert(const_value_id, (*const_val, *expected_type));
+                            func.constants.insert(const_value_id, (*const_val as i64, *expected_type));
                             ir_args.push(const_value_id);
                         }
                     }
@@ -556,8 +564,8 @@ fn lower_instruction(
                     }
                 };
 
-                let (addr_id, _addr_type) = lower_value(ctx, address)?; // Address type checking skipped for now
-                let (val_id, val_type) = lower_value(ctx, value)?;
+                let (addr_id, _addr_type) = lower_value_with_func(ctx, func, address, Type::I32)?; // Address type checking skipped for now
+                let (val_id, val_type) = lower_value_with_func(ctx, func, value, ty)?;
 
                 // Check that value type matches store type
                 if val_type != ty {
@@ -589,13 +597,20 @@ fn lower_instruction(
 /// Lower a terminator
 fn lower_terminator(
     ctx: &mut LoweringContext,
-    _func: &mut Function,
+    func: &mut Function,
     terminator: &tilt_ast::Terminator,
 ) -> Result<Terminator, ()> {
     match terminator {
         tilt_ast::Terminator::Ret(value_opt) => {
             if let Some(value) = value_opt {
-                let (value_id, value_type) = lower_value(ctx, value)?;
+                // Get the expected return type from the current function
+                let expected_type = if let Some(current_func) = &ctx.current_function {
+                    current_func.return_type
+                } else {
+                    Type::I32 // Default fallback
+                };
+                
+                let (value_id, value_type) = lower_value_with_func(ctx, func, value, expected_type)?;
                 
                 // Check that return type matches function return type
                 if let Some(current_func) = &ctx.current_function {
@@ -640,7 +655,7 @@ fn lower_terminator(
             }
         }
         tilt_ast::Terminator::BrIf { cond, true_label, false_label } => {
-            let (cond_id, cond_type) = lower_value(ctx, cond)?;
+            let (cond_id, cond_type) = lower_value_with_func(ctx, func, cond, Type::I32)?;
 
             // Check that condition is an integer type
             match cond_type {
@@ -687,6 +702,7 @@ fn lower_terminator(
 }
 
 /// Lower a value (variable reference or constant)
+#[allow(dead_code)]
 fn lower_value(
     ctx: &mut LoweringContext,
     value: &tilt_ast::Value,
@@ -712,6 +728,33 @@ fn lower_value(
                 location: "constant value".to_string(),
             });
             Err(())
+        }
+    }
+}
+
+fn lower_value_with_func(
+    ctx: &mut LoweringContext,
+    func: &mut Function,
+    value: &tilt_ast::Value,
+    expected_type: Type,
+) -> Result<(ValueId, Type), ()> {
+    match value {
+        tilt_ast::Value::Variable(name) => {
+            if let Some((value_id, ty)) = ctx.lookup_variable(name) {
+                Ok((value_id, ty))
+            } else {
+                ctx.error(SemanticError::UndefinedIdentifier {
+                    name: name.to_string(),
+                    location: "variable reference".to_string(),
+                });
+                Err(())
+            }
+        }
+        tilt_ast::Value::Constant(const_val) => {
+            // Create a constant instruction for this value
+            let const_value_id = func.next_value();
+            func.constants.insert(const_value_id, (*const_val as i64, expected_type));
+            Ok((const_value_id, expected_type))
         }
     }
 }

@@ -75,6 +75,8 @@ pub enum Expression<'a> {
         name: Identifier<'a>,
         args: Vec<Value<'a>>,
     },
+    // Direct constant value (e.g., `42`)
+    Constant(i32),
     // e.g., `phi [entry: v_init], [loop: v_next]`
     Phi {
         nodes: Vec<(Identifier<'a>, Value<'a>)>,
@@ -117,5 +119,5 @@ pub enum Value<'a> {
     // A reference to another SSA value, e.g., `my_var`
     Variable(Identifier<'a>),
     // A literal constant, e.g., `123`
-    Constant(i64),
+    Constant(i32),
 }
