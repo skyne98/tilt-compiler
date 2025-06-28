@@ -1,0 +1,9 @@
+# Simple test for basic functionality
+import "env" "print_i32" (val:i32) -> void
+
+fn main() -> void {
+entry:
+    val:i32 = i32.const(42)
+    call print_i32(val)
+    ret
+}

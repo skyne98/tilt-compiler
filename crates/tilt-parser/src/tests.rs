@@ -377,6 +377,7 @@ mod tests {
         assert_eq!(result, ImportDecl {
             module: "stdlib",
             name: "print",
+            calling_convention: None,
             params: vec![],
             return_type: Type::Void
         });
@@ -391,6 +392,7 @@ mod tests {
         assert_eq!(result, ImportDecl {
             module: "math",
             name: "sqrt",
+            calling_convention: None,
             params: vec![],
             return_type: Type::F64
         });

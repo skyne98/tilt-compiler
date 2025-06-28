@@ -1,0 +1,52 @@
+# TILT Memory Operations Example
+# This demonstrates the new memory and pointer primitives
+
+# Import the memory allocation functions
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+# A simple function that demonstrates pointer arithmetic and memory allocation
+fn test_memory() -> i32 {
+entry:
+    # Allocate 8 bytes for two i32 values
+    size:i64 = sizeof.i32()
+    size2:i64 = i64.add(size, size)
+    mem_ptr:ptr = alloc(size2)
+    
+    # Store values at different offsets
+    val1:i32 = i32.const(42)
+    val2:i32 = i32.const(123)
+    
+    # Store first value at offset 0
+    i32.store mem_ptr, val1
+    
+    # Calculate pointer to second i32 (offset 4)
+    offset:i64 = sizeof.i32()
+    ptr2:ptr = ptr.add(mem_ptr, offset)
+    
+    # Store second value at offset 4
+    i32.store ptr2, val2
+    
+    # Load values back and verify
+    loaded1:i32 = i32.load(mem_ptr)
+    loaded2:i32 = i32.load(ptr2)
+    
+    # Calculate result: loaded1 + loaded2 should be 42 + 123 = 165
+    result:i32 = i32.add(loaded1, loaded2)
+    
+    # Clean up allocated memory
+    call free(mem_ptr)
+    
+    ret result
+}
+
+# Main entry point - demonstrates basic memory operations
+fn main() -> void {
+entry:
+    # Call our memory test function
+    result:i32 = call test_memory()
+    
+    # In a real implementation, you might print the result
+    # For now, we just return
+    ret
+}

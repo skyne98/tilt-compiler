@@ -24,6 +24,7 @@ pub enum TopLevelItem<'a> {
 pub struct ImportDecl<'a> {
     pub module: &'a str,
     pub name: &'a str,
+    pub calling_convention: Option<&'a str>, // e.g., "c" for C calling convention
     pub params: Vec<TypedIdentifier<'a>>,
     pub return_type: Type,
 }
@@ -111,6 +112,7 @@ pub enum Type {
     I64,
     F32,
     F64,
+    Ptr, // Platform-native pointer type
     Void,
 }
 

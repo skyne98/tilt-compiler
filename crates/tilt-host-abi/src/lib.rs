@@ -13,6 +13,7 @@ use tilt_ast::Type;
 pub enum RuntimeValue {
     I32(i32),
     I64(i64),
+    Ptr(u64),  // Platform-native pointer as u64
     Void,
 }
 
@@ -22,6 +23,7 @@ impl RuntimeValue {
         match self {
             RuntimeValue::I32(_) => Type::I32,
             RuntimeValue::I64(_) => Type::I64,
+            RuntimeValue::Ptr(_) => Type::Ptr,
             RuntimeValue::Void => Type::Void,
         }
     }
@@ -42,6 +44,14 @@ impl RuntimeValue {
         }
     }
 
+    /// Extract a pointer value, panicking if the type doesn't match
+    pub fn as_ptr(&self) -> u64 {
+        match self {
+            RuntimeValue::Ptr(val) => *val,
+            _ => panic!("Expected ptr, got {:?}", self),
+        }
+    }
+
     /// Try to extract an i32 value, returning None if the type doesn't match
     pub fn try_as_i32(&self) -> Option<i32> {
         match self {
@@ -54,6 +64,14 @@ impl RuntimeValue {
     pub fn try_as_i64(&self) -> Option<i64> {
         match self {
             RuntimeValue::I64(val) => Some(*val),
+            _ => None,
+        }
+    }
+
+    /// Try to extract a pointer value, returning None if the type doesn't match
+    pub fn try_as_ptr(&self) -> Option<u64> {
+        match self {
+            RuntimeValue::Ptr(val) => Some(*val),
             _ => None,
         }
     }
@@ -172,6 +190,80 @@ impl HostABI for ConsoleHostABI {
 
     fn available_functions(&self) -> Vec<&str> {
         vec!["print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
+    }
+}
+
+/// Extended host ABI that includes memory management functions
+pub struct MemoryHostABI {
+    /// Simple memory allocator using a HashMap to track allocations
+    memory: std::collections::HashMap<u64, Vec<u8>>,
+    /// Next allocation address
+    next_addr: u64,
+}
+
+impl MemoryHostABI {
+    pub fn new() -> Self {
+        Self {
+            memory: std::collections::HashMap::new(),
+            next_addr: 0x1000, // Start at a non-zero address
+        }
+    }
+
+    fn allocate(&mut self, size: u64) -> u64 {
+        if size == 0 {
+            return 0; // Null pointer for zero-sized allocation
+        }
+
+        let addr = self.next_addr;
+        self.next_addr += size + 8; // Add some padding between allocations
+        self.memory.insert(addr, vec![0; size as usize]);
+        addr
+    }
+
+    fn deallocate(&mut self, addr: u64) -> Result<(), String> {
+        if addr == 0 {
+            return Ok(()); // Freeing null pointer is a no-op
+        }
+
+        if self.memory.remove(&addr).is_some() {
+            Ok(())
+        } else {
+            Err(format!("Attempt to free invalid address: 0x{:x}", addr))
+        }
+    }
+}
+
+impl HostABI for MemoryHostABI {
+    fn call_host_function(&mut self, name: &str, args: &[RuntimeValue]) -> HostResult {
+        match name {
+            "alloc" => {
+                if args.len() != 1 {
+                    return Err(format!("alloc expects 1 argument, got {}", args.len()));
+                }
+                let size = args[0].as_i64() as u64;
+                let addr = self.allocate(size);
+                Ok(RuntimeValue::Ptr(addr))
+            }
+            
+            "free" => {
+                if args.len() != 1 {
+                    return Err(format!("free expects 1 argument, got {}", args.len()));
+                }
+                let addr = args[0].as_ptr();
+                self.deallocate(addr)?;
+                Ok(RuntimeValue::Void)
+            }
+            
+            // Delegate other functions to a console ABI
+            _ => {
+                let mut console_abi = ConsoleHostABI::new();
+                console_abi.call_host_function(name, args)
+            }
+        }
+    }
+
+    fn available_functions(&self) -> Vec<&str> {
+        vec!["alloc", "free", "print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
     }
 }
 

@@ -11,36 +11,33 @@ use tilt_ir::lower_program;
 use tilt_codegen_cranelift::JIT;
 use logos::Logos;
 use std::mem;
-
-// Our sample TILT program, demonstrating basic features for the minimal parser.
-const TILT_CODE: &str = r#"
-# Import host functions with parameters
-import "env" "print_hello" -> void
-import "env" "print_char" (c:i32) -> void
-
-# Function that takes multiple parameters
-fn print_between(start:i32, end:i32) -> void {
-entry:
-    call print_char(start)
-    call print_char(45)  # dash character
-    call print_char(end)
-    ret
-}
-
-# Main entry point.
-fn main() -> void {
-entry:
-    call print_between(65, 90)  # Print A-Z
-    call print_hello()
-    ret
-}
-"#;
+use std::env;
+use std::fs;
 
 fn main() {
     println!("--- TILT COMPILER with JIT EXECUTION ---");
-    println!("Compiling and executing source code:\n{}\n", TILT_CODE);
+    
+    // Get command line arguments
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        eprintln!("Usage: {} <file.tilt>", args[0]);
+        return;
+    }
+    
+    let filename = &args[1];
+    
+    // Read the source file
+    let source = match fs::read_to_string(filename) {
+        Ok(content) => content,
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", filename, e);
+            return;
+        }
+    };
+    
+    println!("Compiling and executing source code:\n{}\n", source);
 
-    match compile_and_run(TILT_CODE) {
+    match compile_and_run(&source) {
         Ok(_) => println!("\n--- EXECUTION COMPLETED SUCCESSFULLY ---"),
         Err(e) => eprintln!("ERROR: {}", e),
     }

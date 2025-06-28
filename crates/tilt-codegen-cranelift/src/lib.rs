@@ -55,6 +55,8 @@ impl JIT {
         builder.symbol("print_i64", host_print_i64 as *const u8);
         builder.symbol("println", host_println as *const u8);
         builder.symbol("read_i32", host_read_i32 as *const u8);
+        builder.symbol("alloc", host_alloc as *const u8);
+        builder.symbol("free", host_free as *const u8);
 
         // Create the JIT module.
         let module = JITModule::new(builder);
@@ -368,6 +370,7 @@ impl<'a> Translator<'a> {
                 let cl_value = match ty {
                     IRType::I32 => self.builder.ins().iconst(types::I32, *value),
                     IRType::I64 => self.builder.ins().iconst(types::I64, *value),
+                    IRType::Ptr => self.builder.ins().iconst(types::I64, *value),
                     IRType::F32 => self.builder.ins().f32const(*value as f32),
                     IRType::F64 => self.builder.ins().f64const(*value as f64),
                     _ => return Err(format!("Constant type {:?} not supported", ty)),
@@ -396,6 +399,60 @@ impl<'a> Translator<'a> {
                     .ins()
                     .load(cl_type, MemFlags::new(), addr_val, 0);
                 self.value_map.insert(*dest, result);
+                Ok(())
+            }
+            
+            Instruction::PtrAdd { dest, ptr, offset } => {
+                let ptr_val = self.get_value_or_constant(*ptr)?;
+                let offset_val = self.get_value_or_constant(*offset)?;
+
+                let result = self.builder.ins().iadd(ptr_val, offset_val);
+                self.value_map.insert(*dest, result);
+                Ok(())
+            }
+            
+            Instruction::SizeOf { dest, ty } => {
+                let size = match ty {
+                    IRType::I32 => 4,
+                    IRType::I64 => 8,
+                    IRType::F32 => 4,
+                    IRType::F64 => 8,
+                    IRType::Ptr => 8, // Assume 64-bit pointers
+                    IRType::Void => 0,
+                };
+
+                let size_val = self.builder.ins().iconst(types::I64, size);
+                self.value_map.insert(*dest, size_val);
+                Ok(())
+            }
+            
+            Instruction::Alloc { dest, size } => {
+                // Call the host ABI alloc function
+                let size_val = self.get_value_or_constant(*size)?;
+                
+                // For now, we'll call a host function - this requires the alloc function to be registered
+                let alloc_func_id = self.function_ids.get("alloc")
+                    .copied()
+                    .ok_or_else(|| "alloc function not found".to_string())?;
+                
+                let alloc_func_ref = self.module.declare_func_in_func(alloc_func_id, &mut self.builder.func);
+                let call_result = self.builder.ins().call(alloc_func_ref, &[size_val]);
+                let result_val = self.builder.inst_results(call_result)[0];
+                
+                self.value_map.insert(*dest, result_val);
+                Ok(())
+            }
+            
+            Instruction::Free { ptr } => {
+                // Call the host ABI free function
+                let ptr_val = self.get_value_or_constant(*ptr)?;
+                
+                let free_func_id = self.function_ids.get("free")
+                    .copied()
+                    .ok_or_else(|| "free function not found".to_string())?;
+                
+                let free_func_ref = self.module.declare_func_in_func(free_func_id, &mut self.builder.func);
+                self.builder.ins().call(free_func_ref, &[ptr_val]);
                 Ok(())
             }
         }
@@ -452,6 +509,7 @@ impl<'a> Translator<'a> {
         match ty {
             IRType::I32 => self.builder.ins().iconst(types::I32, value),
             IRType::I64 => self.builder.ins().iconst(types::I64, value),
+            IRType::Ptr => self.builder.ins().iconst(types::I64, value),
             IRType::F32 => self.builder.ins().f32const(value as f32),
             IRType::F64 => self.builder.ins().f64const(value as f64),
             IRType::Void => self.builder.ins().iconst(types::I8, 0), // Placeholder
@@ -480,6 +538,7 @@ fn translate_type(ir_type: &IRType) -> types::Type {
         IRType::I64 => types::I64,
         IRType::F32 => types::F32,
         IRType::F64 => types::F64,
+        IRType::Ptr => types::I64, // Pointers are 64-bit integers
         IRType::Void => types::I8, // Placeholder, void functions return nothing
     }
 }
@@ -539,5 +598,20 @@ fn host_read_i32() -> i32 {
             RuntimeValue::I32(val) => val,
             _ => 0, // Default value on error
         }
+    }
+}
+
+fn host_alloc(size: i64) -> u64 {
+    unsafe {
+        match call_host_abi("alloc", &[RuntimeValue::I64(size)]) {
+            RuntimeValue::Ptr(addr) => addr,
+            _ => 0, // Null pointer on error
+        }
+    }
+}
+
+fn host_free(ptr: u64) {
+    unsafe {
+        call_host_abi("free", &[RuntimeValue::Ptr(ptr)]);
     }
 }

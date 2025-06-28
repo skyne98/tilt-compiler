@@ -145,6 +145,7 @@ fn lower_import(_ctx: &mut LoweringContext, import: &tilt_ast::ImportDecl) -> Im
     ImportDecl {
         module: import.module.to_string(),
         name: import.name.to_string(),
+        calling_convention: import.calling_convention.map(|s| s.to_string()),
         params: import.params.iter().map(|p| p.ty).collect(),
         return_type: import.return_type,
     }
@@ -325,6 +326,131 @@ fn lower_instruction(
                     }
                 }
                 tilt_ast::Expression::Operation { op, args } => {
+                    // Handle new memory operations
+                    if *op == "ptr.add" {
+                        // ptr.add ptr_val, offset_val
+                        if args.len() != 2 {
+                            ctx.error(SemanticError::InvalidOperation {
+                                operation: format!("ptr.add with {} arguments (expected 2)", args.len()),
+                                ty: dest.ty,
+                                location: "ptr.add operation".to_string(),
+                            });
+                            return Err(());
+                        }
+                        
+                        if dest.ty != Type::Ptr {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Ptr,
+                                found: dest.ty,
+                                location: "ptr.add result".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        let (ptr_id, ptr_type) = lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                        let (offset_id, offset_type) = lower_value_with_func(ctx, func, &args[1], Type::I64)?;
+
+                        if ptr_type != Type::Ptr {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Ptr,
+                                found: ptr_type,
+                                location: "ptr.add pointer operand".to_string(),
+                            });
+                            return Err(());
+                        }
+                        if offset_type != Type::I64 {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::I64,
+                                found: offset_type,
+                                location: "ptr.add offset operand".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        return Ok(Instruction::PtrAdd {
+                            dest: dest_value_id,
+                            ptr: ptr_id,
+                            offset: offset_id,
+                        });
+                    } else if op.starts_with("sizeof.") {
+                        // sizeof.i32, sizeof.i64, etc.
+                        if !args.is_empty() {
+                            ctx.error(SemanticError::InvalidOperation {
+                                operation: format!("sizeof with {} arguments (expected 0)", args.len()),
+                                ty: dest.ty,
+                                location: "sizeof operation".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        if dest.ty != Type::I64 {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::I64,
+                                found: dest.ty,
+                                location: "sizeof result".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        let type_part = &op[7..]; // Skip "sizeof."
+                        let target_type = match type_part {
+                            "i32" => Type::I32,
+                            "i64" => Type::I64,
+                            "f32" => Type::F32,
+                            "f64" => Type::F64,
+                            "ptr" => Type::Ptr,
+                            "void" => Type::Void,
+                            _ => {
+                                ctx.error(SemanticError::InvalidOperation {
+                                    operation: format!("sizeof.{} with unknown type", type_part),
+                                    ty: dest.ty,
+                                    location: "sizeof operation".to_string(),
+                                });
+                                return Err(());
+                            }
+                        };
+
+                        return Ok(Instruction::SizeOf {
+                            dest: dest_value_id,
+                            ty: target_type,
+                        });
+                    } else if *op == "alloc" {
+                        // alloc size_val
+                        if args.len() != 1 {
+                            ctx.error(SemanticError::InvalidOperation {
+                                operation: format!("alloc with {} arguments (expected 1)", args.len()),
+                                ty: dest.ty,
+                                location: "alloc operation".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        if dest.ty != Type::Ptr {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Ptr,
+                                found: dest.ty,
+                                location: "alloc result".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        let (size_id, size_type) = lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+
+                        if size_type != Type::I64 {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::I64,
+                                found: size_type,
+                                location: "alloc size operand".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        return Ok(Instruction::Alloc {
+                            dest: dest_value_id,
+                            size: size_id,
+                        });
+                    }
+
                     // Parse operation (e.g., "i32.add" -> BinaryOperator::Add)
                     if let Some(dot_pos) = op.find('.') {
                         let type_part = &op[..dot_pos];
@@ -335,6 +461,7 @@ fn lower_instruction(
                             "i64" => Type::I64,
                             "f32" => Type::F32,
                             "f64" => Type::F64,
+                            "ptr" => Type::Ptr,
                             _ => {
                                 ctx.error(SemanticError::InvalidOperation {
                                     operation: op.to_string(),
@@ -344,6 +471,44 @@ fn lower_instruction(
                                 return Err(());
                             }
                         };
+
+                        // Handle memory load operations
+                        if op_part == "load" {
+                            if args.len() != 1 {
+                                ctx.error(SemanticError::InvalidOperation {
+                                    operation: format!("{}.load with {} arguments (expected 1)", type_part, args.len()),
+                                    ty: dest.ty,
+                                    location: "load operation".to_string(),
+                                });
+                                return Err(());
+                            }
+
+                            if ty != dest.ty {
+                                ctx.error(SemanticError::TypeMismatch {
+                                    expected: dest.ty,
+                                    found: ty,
+                                    location: "load result".to_string(),
+                                });
+                                return Err(());
+                            }
+
+                            let (addr_id, addr_type) = lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+
+                            if addr_type != Type::Ptr {
+                                ctx.error(SemanticError::TypeMismatch {
+                                    expected: Type::Ptr,
+                                    found: addr_type,
+                                    location: "load address operand".to_string(),
+                                });
+                                return Err(());
+                            }
+
+                            return Ok(Instruction::Load {
+                                dest: dest_value_id,
+                                ty,
+                                address: addr_id,
+                            });
+                        }
 
                         // Check that destination type matches operation type
                         if ty != dest.ty {
@@ -535,6 +700,24 @@ fn lower_instruction(
             }
         }
         tilt_ast::Instruction::Store { op, address, value } => {
+            // Handle free operation first
+            if *op == "free" {
+                let (ptr_id, ptr_type) = lower_value_with_func(ctx, func, address, Type::Ptr)?;
+                
+                if ptr_type != Type::Ptr {
+                    ctx.error(SemanticError::TypeMismatch {
+                        expected: Type::Ptr,
+                        found: ptr_type,
+                        location: "free pointer operand".to_string(),
+                    });
+                    return Err(());
+                }
+
+                return Ok(Instruction::Free {
+                    ptr: ptr_id,
+                });
+            }
+
             // Parse store operation (e.g., "i32.store")
             if let Some(dot_pos) = op.find('.') {
                 let type_part = &op[..dot_pos];
@@ -554,6 +737,7 @@ fn lower_instruction(
                     "i64" => Type::I64,
                     "f32" => Type::F32,
                     "f64" => Type::F64,
+                    "ptr" => Type::Ptr,
                     _ => {
                         ctx.error(SemanticError::InvalidOperation {
                             operation: op.to_string(),
@@ -564,8 +748,18 @@ fn lower_instruction(
                     }
                 };
 
-                let (addr_id, _addr_type) = lower_value_with_func(ctx, func, address, Type::I32)?; // Address type checking skipped for now
+                let (addr_id, addr_type) = lower_value_with_func(ctx, func, address, Type::Ptr)?;
                 let (val_id, val_type) = lower_value_with_func(ctx, func, value, ty)?;
+
+                // Check that address type is pointer
+                if addr_type != Type::Ptr {
+                    ctx.error(SemanticError::TypeMismatch {
+                        expected: Type::Ptr,
+                        found: addr_type,
+                        location: "store address".to_string(),
+                    });
+                    return Err(());
+                }
 
                 // Check that value type matches store type
                 if val_type != ty {

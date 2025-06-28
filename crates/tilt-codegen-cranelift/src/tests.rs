@@ -869,10 +869,6 @@ entry:
                     call_count: Arc::new(Mutex::new(0)),
                 }
             }
-            
-            fn get_call_count(&self) -> i32 {
-                *self.call_count.lock().unwrap()
-            }
         }
         
         impl HostABI for TestHostABI {

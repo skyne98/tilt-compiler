@@ -28,6 +28,7 @@ pub struct Program {
 pub struct ImportDecl {
     pub module: String,
     pub name: String,
+    pub calling_convention: Option<String>,  // e.g., "c" for C calling convention
     pub params: Vec<Type>,
     pub return_type: Type,
 }
@@ -110,6 +111,26 @@ pub enum Instruction {
         dest: ValueId,
         value: i64,
         ty: Type,
+    },
+    /// Pointer arithmetic - add offset to pointer
+    PtrAdd {
+        dest: ValueId,
+        ptr: ValueId,
+        offset: ValueId,
+    },
+    /// Get size of type in bytes
+    SizeOf {
+        dest: ValueId,
+        ty: Type,
+    },
+    /// Host ABI allocation
+    Alloc {
+        dest: ValueId,
+        size: ValueId,
+    },
+    /// Host ABI deallocation
+    Free {
+        ptr: ValueId,
     },
 }
 

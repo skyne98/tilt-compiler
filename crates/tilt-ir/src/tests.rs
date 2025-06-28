@@ -27,6 +27,7 @@ mod tests {
         let import = ImportDecl {
             module: "env",
             name: "print",
+            calling_convention: None,
             params: vec![],
             return_type: Type::Void,
         };
@@ -66,6 +67,7 @@ mod tests {
         let import = ImportDecl {
             module: "env",
             name: "getc",
+            calling_convention: None,
             params: vec![],
             return_type: Type::I32,
         };
@@ -111,6 +113,7 @@ mod tests {
         let import = ImportDecl {
             module: "env",
             name: "putc",
+            calling_convention: None,
             params: vec![],
             return_type: Type::Void,
         };
@@ -209,6 +212,7 @@ mod tests {
         let import = ImportDecl {
             module: "env",
             name: "void_func",
+            calling_convention: None,
             params: vec![],
             return_type: Type::Void,
         };
@@ -331,6 +335,7 @@ mod integration_tests {
         let import = ImportDecl {
             module: "env",
             name: "print_i32",
+            calling_convention: None,
             params: vec![TypedIdentifier {
                 name: "value",
                 ty: Type::I32,

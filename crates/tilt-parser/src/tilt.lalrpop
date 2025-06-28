@@ -31,6 +31,7 @@ extern {
         "i64" => Token::TI64,
         "f32" => Token::TF32,
         "f64" => Token::TF64,
+        "ptr" => Token::TPtr,
         "void" => Token::TVoid,
 
         // Punctuation
@@ -58,6 +59,7 @@ pub Type: Type = {
     "i64" => Type::I64,
     "f32" => Type::F32,
     "f64" => Type::F64,
+    "ptr" => Type::Ptr,
     "void" => Type::Void,
 };
 
@@ -87,21 +89,29 @@ pub Value: Value<'input> = {
     <id:Identifier> => Value::Variable(id),
 };
 
-// Simple expression parsing - handle function calls and constants
+// Simple expression parsing - handle function calls, constants, and operations
 pub Expression: Expression<'input> = {
     // Function calls with parentheses
     "call" <name:Identifier> "(" ")" => Expression::Call { name, args: Vec::new() },
     "call" <name:Identifier> "(" <args:ArgumentList> ")" => Expression::Call { name, args },
     
+    // Operations with arguments (e.g., ptr.add, ptr.load, etc.) - use parentheses to disambiguate
+    <op:Identifier> "(" <args:ArgumentList> ")" => Expression::Operation { op, args },
+    
+    // Operations without arguments (e.g., sizeof) - must have parentheses for consistency
+    <op:Identifier> "(" ")" => Expression::Operation { op, args: Vec::new() },
+    
     // Constant values as direct constants
     <n:NumberLiteral> => Expression::Constant(n as i32),
 };
 
-// Simple instruction parsing - assignment and call instructions
+// Simple instruction parsing - assignment, call instructions, and memory operations
 pub Instruction: Instruction<'input> = {
     <dest:TypedIdentifier> "=" <expr:Expression> => Instruction::Assign { dest, expr },
     "call" <name:Identifier> "(" ")" => Instruction::Call { name, args: Vec::new() },
     "call" <name:Identifier> "(" <args:ArgumentList> ")" => Instruction::Call { name, args },
+    <op:Identifier> <address:Value> "," <value:Value> => Instruction::Store { op, address, value },
+    <op:Identifier> <value:Value> => Instruction::Store { op, address: value, value: Value::Constant(0) },
 };
 
 // Simple terminator parsing
@@ -126,19 +136,41 @@ pub Block: Block<'input> = {
         Block { label, instructions, terminator },
 };
 
-// Simple import declaration parsing
+// Simple import declaration parsing with optional calling convention
 pub ImportDecl: ImportDecl<'input> = {
+    // With calling convention: import "module" "name" "c" (params) -> return_type
+    "import" <module:StringLiteral> <name:StringLiteral> <cc:StringLiteral> "(" <params:ParameterList> ")" "->" <return_type:Type> => 
+        ImportDecl {
+            module,
+            name,
+            calling_convention: Some(cc),
+            params,
+            return_type,
+        },
+    // Without calling convention
     "import" <module:StringLiteral> <name:StringLiteral> "(" <params:ParameterList> ")" "->" <return_type:Type> => 
         ImportDecl {
             module,
             name,
+            calling_convention: None,
             params,
             return_type,
         },
+    // With calling convention, no params
+    "import" <module:StringLiteral> <name:StringLiteral> <cc:StringLiteral> "->" <return_type:Type> => 
+        ImportDecl {
+            module,
+            name,
+            calling_convention: Some(cc),
+            params: Vec::new(),
+            return_type,
+        },
+    // Without calling convention, no params  
     "import" <module:StringLiteral> <name:StringLiteral> "->" <return_type:Type> => 
         ImportDecl {
             module,
             name,
+            calling_convention: None,
             params: Vec::new(),
             return_type,
         },

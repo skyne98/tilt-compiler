@@ -79,7 +79,10 @@ impl<'a> FunctionBuilder<'a> {
             Instruction::BinaryOp { dest, .. } => *dest,
             Instruction::UnaryOp { dest, .. } => *dest,
             Instruction::Load { dest, .. } => *dest,
-            Instruction::CallVoid { .. } | Instruction::Store { .. } => {
+            Instruction::PtrAdd { dest, .. } => *dest,
+            Instruction::SizeOf { dest, .. } => *dest,
+            Instruction::Alloc { dest, .. } => *dest,
+            Instruction::CallVoid { .. } | Instruction::Store { .. } | Instruction::Free { .. } => {
                 // These instructions don't produce values
                 ValueId::new(0) // This shouldn't be used
             }
@@ -233,6 +236,50 @@ impl<'a, 'b> InstructionBuilder<'a, 'b> {
         let terminator = Terminator::Br { target };
         self.builder.set_terminator(terminator);
     }
+
+    /// Build a pointer addition instruction
+    pub fn ptr_add(&mut self, ptr: ValueId, offset: ValueId) -> ValueId {
+        let dest = self.builder.func.next_value();
+        let instr = Instruction::PtrAdd { dest, ptr, offset };
+        self.builder.add_instruction(instr);
+        dest
+    }
+
+    /// Build a sizeof instruction
+    pub fn size_of(&mut self, ty: Type) -> ValueId {
+        let dest = self.builder.func.next_value();
+        let instr = Instruction::SizeOf { dest, ty };
+        self.builder.add_instruction(instr);
+        dest
+    }
+
+    /// Build an allocation instruction
+    pub fn alloc(&mut self, size: ValueId) -> ValueId {
+        let dest = self.builder.func.next_value();
+        let instr = Instruction::Alloc { dest, size };
+        self.builder.add_instruction(instr);
+        dest
+    }
+
+    /// Build a free instruction
+    pub fn free(&mut self, ptr: ValueId) {
+        let instr = Instruction::Free { ptr };
+        self.builder.add_instruction(instr);
+    }
+
+    /// Build a memory load instruction
+    pub fn load(&mut self, ty: Type, address: ValueId) -> ValueId {
+        let dest = self.builder.func.next_value();
+        let instr = Instruction::Load { dest, ty, address };
+        self.builder.add_instruction(instr);
+        dest
+    }
+
+    /// Build a memory store instruction
+    pub fn store(&mut self, address: ValueId, value: ValueId, ty: Type) {
+        let instr = Instruction::Store { address, value, ty };
+        self.builder.add_instruction(instr);
+    }
 }
 
 /// Builder for constructing entire programs
@@ -257,6 +304,18 @@ impl ProgramBuilder {
         self.program.imports.push(ImportDecl {
             module: module.to_string(),
             name: name.to_string(),
+            calling_convention: None,
+            params,
+            return_type,
+        });
+    }
+
+    /// Add an import with calling convention to the program
+    pub fn add_import_with_cc(&mut self, module: &str, name: &str, calling_convention: Option<String>, params: Vec<Type>, return_type: Type) {
+        self.program.imports.push(ImportDecl {
+            module: module.to_string(),
+            name: name.to_string(),
+            calling_convention,
             params,
             return_type,
         });

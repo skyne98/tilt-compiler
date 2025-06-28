@@ -163,6 +163,7 @@ impl<H: HostABI> VM<H> {
             let runtime_value = match const_type {
                 Type::I32 => RuntimeValue::I32(*const_value as i32),
                 Type::I64 => RuntimeValue::I64(*const_value),
+                Type::Ptr => RuntimeValue::Ptr(*const_value as u64),
                 Type::Void => RuntimeValue::Void,
                 Type::F32 | Type::F64 => {
                     return Err(VMError::InvalidInstruction("Float types not yet supported".to_string()));
@@ -293,6 +294,7 @@ impl<H: HostABI> VM<H> {
                 let runtime_value = match ty {
                     Type::I32 => RuntimeValue::I32(*value as i32),
                     Type::I64 => RuntimeValue::I64(*value),
+                    Type::Ptr => RuntimeValue::Ptr(*value as u64),
                     Type::Void => RuntimeValue::Void,
                     Type::F32 | Type::F64 => {
                         return Err(VMError::InvalidInstruction("Float types not yet supported".to_string()));
@@ -387,6 +389,73 @@ impl<H: HostABI> VM<H> {
 
             Instruction::Store { .. } => {
                 return Err(VMError::InvalidInstruction("Store instruction not yet implemented".to_string()));
+            }
+
+            Instruction::PtrAdd { dest, ptr, offset } => {
+                let frame = self.call_stack.last().unwrap();
+                let ptr_val = frame.get_value(*ptr)?;
+                let offset_val = frame.get_value(*offset)?;
+
+                let result = match (ptr_val, offset_val) {
+                    (RuntimeValue::Ptr(ptr_addr), RuntimeValue::I64(offset_bytes)) => {
+                        RuntimeValue::Ptr(ptr_addr.wrapping_add(*offset_bytes as u64))
+                    }
+                    _ => return Err(VMError::TypeMismatch {
+                        expected: Type::Ptr,
+                        actual: ptr_val.get_type(),
+                    }),
+                };
+
+                let frame = self.call_stack.last_mut().unwrap();
+                frame.set_value(*dest, result);
+            }
+
+            Instruction::SizeOf { dest, ty } => {
+                let size = match ty {
+                    Type::I32 => 4,
+                    Type::I64 => 8,
+                    Type::F32 => 4,
+                    Type::F64 => 8,
+                    Type::Ptr => 8, // Assume 64-bit pointers
+                    Type::Void => 0,
+                };
+
+                let frame = self.call_stack.last_mut().unwrap();
+                frame.set_value(*dest, RuntimeValue::I64(size));
+            }
+
+            Instruction::Alloc { dest, size } => {
+                let frame = self.call_stack.last().unwrap();
+                let size_val = frame.get_value(*size)?;
+
+                let result = if let RuntimeValue::I64(_size_bytes) = size_val {
+                    let result = self.host_abi.call_host_function("alloc", &[size_val.clone()])
+                        .map_err(VMError::HostCallError)?;
+                    result
+                } else {
+                    return Err(VMError::TypeMismatch {
+                        expected: Type::I64,
+                        actual: size_val.get_type(),
+                    });
+                };
+
+                let frame = self.call_stack.last_mut().unwrap();
+                frame.set_value(*dest, result);
+            }
+
+            Instruction::Free { ptr } => {
+                let frame = self.call_stack.last().unwrap();
+                let ptr_val = frame.get_value(*ptr)?;
+
+                if let RuntimeValue::Ptr(_) = ptr_val {
+                    self.host_abi.call_host_function("free", &[ptr_val.clone()])
+                        .map_err(VMError::HostCallError)?;
+                } else {
+                    return Err(VMError::TypeMismatch {
+                        expected: Type::Ptr,
+                        actual: ptr_val.get_type(),
+                    });
+                }
             }
         }
 
