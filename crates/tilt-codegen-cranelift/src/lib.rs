@@ -189,7 +189,6 @@ impl JIT {
             function_ids: &self.function_ids,
             block_map: HashMap::new(),
             value_map: HashMap::new(),
-            constants: HashMap::new(),
         };
         translator.translate()?;
 
@@ -220,8 +219,6 @@ struct Translator<'a> {
     block_map: HashMap<BlockId, Block>,
     // Maps our SSA value IDs to Cranelift's SSA value objects.
     value_map: HashMap<ValueId, Value>,
-    // Maps constant values to their Cranelift values
-    constants: HashMap<(i64, IRType), Value>,
 }
 
 impl<'a> Translator<'a> {
@@ -466,23 +463,16 @@ impl<'a> Translator<'a> {
         }
     }
 
-    /// Get or create a constant value
+    /// Get or create a constant value (always create fresh to respect SSA)
     fn get_constant(&mut self, value: i64, ty: &IRType) -> Value {
-        let key = (value, ty.clone());
-        if let Some(&cl_value) = self.constants.get(&key) {
-            return cl_value;
-        }
-
-        let cl_value = match ty {
+        // Always create a fresh constant in the current block to respect SSA form
+        match ty {
             IRType::I32 => self.builder.ins().iconst(types::I32, value),
             IRType::I64 => self.builder.ins().iconst(types::I64, value),
             IRType::F32 => self.builder.ins().f32const(value as f32),
             IRType::F64 => self.builder.ins().f64const(value as f64),
             IRType::Void => self.builder.ins().iconst(types::I8, 0), // Placeholder
-        };
-
-        self.constants.insert(key, cl_value);
-        cl_value
+        }
     }
 
     /// Get a value, either from the value map or create a constant
