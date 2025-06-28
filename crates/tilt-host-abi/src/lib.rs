@@ -13,7 +13,7 @@ use tilt_ast::Type;
 pub enum RuntimeValue {
     I32(i32),
     I64(i64),
-    Ptr(u64),  // Platform-native pointer as u64
+    Ptr(u64), // Platform-native pointer as u64
     Void,
 }
 
@@ -94,6 +94,16 @@ pub trait HostABI {
     fn has_function(&self, name: &str) -> bool {
         self.available_functions().contains(&name)
     }
+
+    /// Read a typed value from memory (default implementation returns error)
+    fn read_memory_value(&self, _addr: u64, _ty: tilt_ast::Type) -> Result<RuntimeValue, String> {
+        Err("Memory operations not supported by this host ABI".to_string())
+    }
+
+    /// Write a typed value to memory (default implementation returns error)
+    fn write_memory_value(&mut self, _addr: u64, _value: &RuntimeValue) -> Result<(), String> {
+        Err("Memory operations not supported by this host ABI".to_string())
+    }
 }
 
 /// Standard console-based host ABI implementation
@@ -117,12 +127,15 @@ impl HostABI for ConsoleHostABI {
         match name {
             "print_hello" => {
                 if !args.is_empty() {
-                    return Err(format!("print_hello expects 0 arguments, got {}", args.len()));
+                    return Err(format!(
+                        "print_hello expects 0 arguments, got {}",
+                        args.len()
+                    ));
                 }
                 println!("Hello from TILT!");
                 Ok(RuntimeValue::Void)
             }
-            
+
             "print_i32" => {
                 if args.len() != 1 {
                     return Err(format!("print_i32 expects 1 argument, got {}", args.len()));
@@ -131,7 +144,7 @@ impl HostABI for ConsoleHostABI {
                 print!("{}", value);
                 Ok(RuntimeValue::Void)
             }
-            
+
             "print_i64" => {
                 if args.len() != 1 {
                     return Err(format!("print_i64 expects 1 argument, got {}", args.len()));
@@ -140,7 +153,7 @@ impl HostABI for ConsoleHostABI {
                 print!("{}", value);
                 Ok(RuntimeValue::Void)
             }
-            
+
             "print_char" => {
                 if args.len() != 1 {
                     return Err(format!("print_char expects 1 argument, got {}", args.len()));
@@ -153,7 +166,7 @@ impl HostABI for ConsoleHostABI {
                     Err(format!("Invalid character code: {}", value))
                 }
             }
-            
+
             "println" => {
                 if !args.is_empty() {
                     return Err(format!("println expects 0 arguments, got {}", args.len()));
@@ -161,35 +174,40 @@ impl HostABI for ConsoleHostABI {
                 println!();
                 Ok(RuntimeValue::Void)
             }
-            
+
             "read_i32" => {
                 use std::io::{self, Write};
-                
+
                 if !args.is_empty() {
                     return Err(format!("read_i32 expects 0 arguments, got {}", args.len()));
                 }
-                
+
                 print!("Enter an integer: ");
                 io::stdout().flush().unwrap();
-                
+
                 let mut input = String::new();
                 match io::stdin().read_line(&mut input) {
-                    Ok(_) => {
-                        match input.trim().parse::<i32>() {
-                            Ok(value) => Ok(RuntimeValue::I32(value)),
-                            Err(_) => Err("Failed to parse integer".to_string()),
-                        }
-                    }
+                    Ok(_) => match input.trim().parse::<i32>() {
+                        Ok(value) => Ok(RuntimeValue::I32(value)),
+                        Err(_) => Err("Failed to parse integer".to_string()),
+                    },
                     Err(e) => Err(format!("Failed to read input: {}", e)),
                 }
             }
-            
+
             _ => Err(format!("Unknown host function: {}", name)),
         }
     }
 
     fn available_functions(&self) -> Vec<&str> {
-        vec!["print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
+        vec![
+            "print_hello",
+            "print_i32",
+            "print_i64",
+            "print_char",
+            "println",
+            "read_i32",
+        ]
     }
 }
 
@@ -225,7 +243,9 @@ impl MemoryHostABI {
     pub fn write_memory(&mut self, addr: u64, data: &[u8]) -> Result<(), String> {
         // Find the allocation that contains this address
         for (base_addr, memory_data) in &mut self.memory {
-            if addr >= *base_addr && addr + data.len() as u64 <= *base_addr + memory_data.len() as u64 {
+            if addr >= *base_addr
+                && addr + data.len() as u64 <= *base_addr + memory_data.len() as u64
+            {
                 let offset = (addr - base_addr) as usize;
                 memory_data[offset..offset + data.len()].copy_from_slice(data);
                 return Ok(());
@@ -314,7 +334,7 @@ impl HostABI for MemoryHostABI {
                 let addr = self.allocate(size);
                 Ok(RuntimeValue::Ptr(addr))
             }
-            
+
             "free" => {
                 if args.len() != 1 {
                     return Err(format!("free expects 1 argument, got {}", args.len()));
@@ -323,7 +343,7 @@ impl HostABI for MemoryHostABI {
                 self.deallocate(addr)?;
                 Ok(RuntimeValue::Void)
             }
-            
+
             // Delegate other functions to a console ABI
             _ => {
                 let mut console_abi = ConsoleHostABI::new();
@@ -333,7 +353,24 @@ impl HostABI for MemoryHostABI {
     }
 
     fn available_functions(&self) -> Vec<&str> {
-        vec!["alloc", "free", "print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
+        vec![
+            "alloc",
+            "free",
+            "print_hello",
+            "print_i32",
+            "print_i64",
+            "print_char",
+            "println",
+            "read_i32",
+        ]
+    }
+
+    fn read_memory_value(&self, addr: u64, ty: tilt_ast::Type) -> Result<RuntimeValue, String> {
+        self.read_value(addr, ty)
+    }
+
+    fn write_memory_value(&mut self, addr: u64, value: &RuntimeValue) -> Result<(), String> {
+        self.write_value(addr, value)
     }
 }
 
@@ -405,18 +442,18 @@ impl JITMemoryHostABI {
             return 0;
         }
 
-        use std::alloc::{alloc, Layout};
-        
+        use std::alloc::{Layout, alloc};
+
         let layout = Layout::from_size_align(size as usize, 8).unwrap();
         let ptr = unsafe { alloc(layout) };
-        
+
         if ptr.is_null() {
             return 0; // Allocation failed
         }
 
         let addr = ptr as u64;
         self.allocations.insert(addr, size as usize);
-        
+
         addr
     }
 
@@ -427,7 +464,7 @@ impl JITMemoryHostABI {
         }
 
         if let Some(size) = self.allocations.remove(&addr) {
-            use std::alloc::{dealloc, Layout};
+            use std::alloc::{Layout, dealloc};
             let layout = Layout::from_size_align(size, 8).unwrap();
             let ptr = addr as *mut u8;
             unsafe { dealloc(ptr, layout) };
@@ -449,7 +486,7 @@ impl HostABI for JITMemoryHostABI {
                 let addr = self.allocate_real_memory(size);
                 Ok(RuntimeValue::Ptr(addr))
             }
-            
+
             "free" => {
                 if args.len() != 1 {
                     return Err(format!("free expects 1 argument, got {}", args.len()));
@@ -458,7 +495,7 @@ impl HostABI for JITMemoryHostABI {
                 self.free_real_memory(addr)?;
                 Ok(RuntimeValue::Void)
             }
-            
+
             // Delegate other functions to a console ABI
             _ => {
                 let mut console_abi = ConsoleHostABI::new();
@@ -468,7 +505,16 @@ impl HostABI for JITMemoryHostABI {
     }
 
     fn available_functions(&self) -> Vec<&str> {
-        vec!["alloc", "free", "print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
+        vec![
+            "alloc",
+            "free",
+            "print_hello",
+            "print_i32",
+            "print_i64",
+            "print_char",
+            "println",
+            "read_i32",
+        ]
     }
 }
 
@@ -493,7 +539,7 @@ mod tests {
     #[test]
     fn test_runtime_value_try_cast() {
         let val = RuntimeValue::I32(42);
-        
+
         assert_eq!(val.try_as_i32(), Some(42));
         assert_eq!(val.try_as_i64(), None);
     }
@@ -502,7 +548,7 @@ mod tests {
     fn test_console_host_abi_available_functions() {
         let abi = ConsoleHostABI::new();
         let functions = abi.available_functions();
-        
+
         assert!(functions.contains(&"print_hello"));
         assert!(functions.contains(&"print_i32"));
         assert!(functions.contains(&"print_i64"));
@@ -515,7 +561,7 @@ mod tests {
     fn test_console_host_abi_print_i32() {
         let mut abi = ConsoleHostABI::new();
         let args = vec![RuntimeValue::I32(42)];
-        
+
         let result = abi.call_host_function("print_i32", &args);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), RuntimeValue::Void);
@@ -525,7 +571,7 @@ mod tests {
     fn test_console_host_abi_print_char() {
         let mut abi = ConsoleHostABI::new();
         let args = vec![RuntimeValue::I32(65)]; // ASCII 'A'
-        
+
         let result = abi.call_host_function("print_char", &args);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), RuntimeValue::Void);
@@ -535,7 +581,7 @@ mod tests {
     fn test_console_host_abi_wrong_args() {
         let mut abi = ConsoleHostABI::new();
         let args = vec![RuntimeValue::I32(42), RuntimeValue::I32(43)]; // too many args
-        
+
         let result = abi.call_host_function("print_i32", &args);
         assert!(result.is_err());
     }
@@ -544,7 +590,7 @@ mod tests {
     fn test_console_host_abi_unknown_function() {
         let mut abi = ConsoleHostABI::new();
         let args = vec![];
-        
+
         let result = abi.call_host_function("unknown_function", &args);
         assert!(result.is_err());
     }
@@ -553,10 +599,10 @@ mod tests {
     fn test_null_host_abi() {
         let mut abi = NullHostABI::new();
         let args = vec![RuntimeValue::I32(42)];
-        
+
         let result = abi.call_host_function("print_i32", &args);
         assert!(result.is_err());
-        
+
         assert_eq!(abi.available_functions().len(), 0);
     }
 

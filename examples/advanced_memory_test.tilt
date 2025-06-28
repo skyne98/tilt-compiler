@@ -19,17 +19,20 @@ entry:
     val2:i32 = i32.const(20)
     i32.store(ptr1, val2)
 
-    offset2:i64 = i64.mul(element_size, i64.const(2))
+    two:i64 = i64.const(2)
+    offset2:i64 = i64.mul(element_size, two)
     ptr2:ptr = ptr.add(array_ptr, offset2)
     val3:i32 = i32.const(30)
     i32.store(ptr2, val3)
 
-    offset3:i64 = i64.mul(element_size, i64.const(3))
+    three:i64 = i64.const(3)
+    offset3:i64 = i64.mul(element_size, three)
     ptr3:ptr = ptr.add(array_ptr, offset3)
     val4:i32 = i32.const(40)
     i32.store(ptr3, val4)
 
-    offset4:i64 = i64.mul(element_size, i64.const(4))
+    four:i64 = i64.const(4)
+    offset4:i64 = i64.mul(element_size, four)
     ptr4:ptr = ptr.add(array_ptr, offset4)
     val5:i32 = i32.const(50)
     i32.store(ptr4, val5)

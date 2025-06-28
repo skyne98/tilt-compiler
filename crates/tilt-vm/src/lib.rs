@@ -1,15 +1,15 @@
 // ===================================================================
 // FILE: lib.rs (tilt-vm crate)
 //
-// DESC: Virtual Machine (interpreter) for TILT IR. This provides a 
+// DESC: Virtual Machine (interpreter) for TILT IR. This provides a
 //       portable reference implementation that can execute TILT IR
 //       directly without compilation to native code.
 // ===================================================================
 
-use tilt_ir::*;
+use std::collections::HashMap;
 use tilt_ast::Type;
 use tilt_host_abi::{HostABI, RuntimeValue};
-use std::collections::HashMap;
+use tilt_ir::*;
 
 /// Error types that can occur during VM execution
 #[derive(Debug, Clone, PartialEq)]
@@ -39,7 +39,11 @@ impl std::fmt::Display for VMError {
             VMError::BlockNotFound(id) => write!(f, "Block not found: {:?}", id),
             VMError::ValueNotFound(id) => write!(f, "Value not found: {:?}", id),
             VMError::TypeMismatch { expected, actual } => {
-                write!(f, "Type mismatch: expected {:?}, got {:?}", expected, actual)
+                write!(
+                    f,
+                    "Type mismatch: expected {:?}, got {:?}",
+                    expected, actual
+                )
             }
             VMError::DivisionByZero => write!(f, "Division by zero"),
             VMError::HostCallError(msg) => write!(f, "Host call error: {}", msg),
@@ -78,7 +82,8 @@ impl StackFrame {
     }
 
     fn get_value(&self, value_id: ValueId) -> VMResult<&RuntimeValue> {
-        self.values.get(&value_id)
+        self.values
+            .get(&value_id)
             .ok_or(VMError::ValueNotFound(value_id))
     }
 
@@ -118,7 +123,10 @@ impl<H: HostABI> VM<H> {
     /// Execute a function by name with the given arguments
     pub fn call_function(&mut self, name: &str, args: Vec<RuntimeValue>) -> VMResult<RuntimeValue> {
         // Find the function
-        let function = self.program.functions.iter()
+        let function = self
+            .program
+            .functions
+            .iter()
             .find(|f| f.name == name)
             .ok_or_else(|| VMError::FunctionNotFound(name.to_string()))?;
 
@@ -126,7 +134,9 @@ impl<H: HostABI> VM<H> {
         if args.len() != function.params.len() {
             return Err(VMError::InvalidInstruction(format!(
                 "Function {} expects {} arguments, got {}",
-                name, function.params.len(), args.len()
+                name,
+                function.params.len(),
+                args.len()
             )));
         }
 
@@ -136,7 +146,9 @@ impl<H: HostABI> VM<H> {
         }
 
         // Get the entry block (first block)
-        let entry_block = function.blocks.get(0)
+        let entry_block = function
+            .blocks
+            .get(0)
             .map(|b| b.id)
             .ok_or_else(|| VMError::InvalidInstruction("Function has no blocks".to_string()))?;
 
@@ -166,7 +178,9 @@ impl<H: HostABI> VM<H> {
                 Type::Ptr => RuntimeValue::Ptr(*const_value as u64),
                 Type::Void => RuntimeValue::Void,
                 Type::F32 | Type::F64 => {
-                    return Err(VMError::InvalidInstruction("Float types not yet supported".to_string()));
+                    return Err(VMError::InvalidInstruction(
+                        "Float types not yet supported".to_string(),
+                    ));
                 }
             };
             frame.set_value(*value_id, runtime_value);
@@ -186,15 +200,24 @@ impl<H: HostABI> VM<H> {
             // Extract the current state to avoid borrowing issues
             let (function_name, current_block_id, instruction_pointer) = {
                 let current_frame = self.call_stack.last().unwrap();
-                (current_frame.function_name.clone(), current_frame.current_block, current_frame.instruction_pointer)
+                (
+                    current_frame.function_name.clone(),
+                    current_frame.current_block,
+                    current_frame.instruction_pointer,
+                )
             };
 
             // Find the function and block
-            let function = self.program.functions.iter()
+            let function = self
+                .program
+                .functions
+                .iter()
                 .find(|f| f.name == function_name)
                 .unwrap(); // We know it exists
 
-            let block = function.blocks.iter()
+            let block = function
+                .blocks
+                .iter()
                 .find(|b| b.id == current_block_id)
                 .ok_or(VMError::BlockNotFound(current_block_id))?;
 
@@ -215,17 +238,23 @@ impl<H: HostABI> VM<H> {
                         frame.instruction_pointer = 0;
                         continue;
                     }
-                    Terminator::BrIf { cond, true_target, false_target } => {
+                    Terminator::BrIf {
+                        cond,
+                        true_target,
+                        false_target,
+                    } => {
                         let frame = self.call_stack.last().unwrap();
                         let cond_value = frame.get_value(*cond)?;
-                        
+
                         let is_true = match cond_value {
                             RuntimeValue::I32(val) => *val != 0,
                             RuntimeValue::I64(val) => *val != 0,
-                            _ => return Err(VMError::TypeMismatch {
-                                expected: Type::I32,
-                                actual: cond_value.get_type(),
-                            }),
+                            _ => {
+                                return Err(VMError::TypeMismatch {
+                                    expected: Type::I32,
+                                    actual: cond_value.get_type(),
+                                });
+                            }
                         };
 
                         let frame = self.call_stack.last_mut().unwrap();
@@ -249,19 +278,27 @@ impl<H: HostABI> VM<H> {
     /// Execute a single instruction
     fn execute_instruction(&mut self, instruction: &Instruction) -> VMResult<()> {
         match instruction {
-            Instruction::Call { dest, function, args, return_type: _ } => {
+            Instruction::Call {
+                dest,
+                function,
+                args,
+                return_type: _,
+            } => {
                 // Collect argument values
                 let frame = self.call_stack.last().unwrap();
-                let arg_values: Result<Vec<_>, _> = args.iter()
+                let arg_values: Result<Vec<_>, _> = args
+                    .iter()
                     .map(|arg_id| frame.get_value(*arg_id).map(|v| v.clone()))
                     .collect();
                 let arg_values = arg_values?;
 
                 // Try host function first
                 if self.host_abi.has_function(function) {
-                    let result = self.host_abi.call_host_function(function, &arg_values)
+                    let result = self
+                        .host_abi
+                        .call_host_function(function, &arg_values)
                         .map_err(VMError::HostCallError)?;
-                    
+
                     let frame = self.call_stack.last_mut().unwrap();
                     frame.set_value(*dest, result);
                 } else {
@@ -275,14 +312,16 @@ impl<H: HostABI> VM<H> {
             Instruction::CallVoid { function, args } => {
                 // Collect argument values
                 let frame = self.call_stack.last().unwrap();
-                let arg_values: Result<Vec<_>, _> = args.iter()
+                let arg_values: Result<Vec<_>, _> = args
+                    .iter()
                     .map(|arg_id| frame.get_value(*arg_id).map(|v| v.clone()))
                     .collect();
                 let arg_values = arg_values?;
 
                 // Try host function first
                 if self.host_abi.has_function(function) {
-                    self.host_abi.call_host_function(function, &arg_values)
+                    self.host_abi
+                        .call_host_function(function, &arg_values)
                         .map_err(VMError::HostCallError)?;
                 } else {
                     // Recursive call to TILT function
@@ -297,15 +336,23 @@ impl<H: HostABI> VM<H> {
                     Type::Ptr => RuntimeValue::Ptr(*value as u64),
                     Type::Void => RuntimeValue::Void,
                     Type::F32 | Type::F64 => {
-                        return Err(VMError::InvalidInstruction("Float types not yet supported".to_string()));
+                        return Err(VMError::InvalidInstruction(
+                            "Float types not yet supported".to_string(),
+                        ));
                     }
                 };
-                
+
                 let frame = self.call_stack.last_mut().unwrap();
                 frame.set_value(*dest, runtime_value);
             }
 
-            Instruction::BinaryOp { dest, op, ty: _, lhs, rhs } => {
+            Instruction::BinaryOp {
+                dest,
+                op,
+                ty: _,
+                lhs,
+                rhs,
+            } => {
                 let frame = self.call_stack.last().unwrap();
                 let lhs_val = frame.get_value(*lhs)?;
                 let rhs_val = frame.get_value(*rhs)?;
@@ -314,26 +361,32 @@ impl<H: HostABI> VM<H> {
                     BinaryOperator::Add => match (lhs_val, rhs_val) {
                         (RuntimeValue::I32(a), RuntimeValue::I32(b)) => RuntimeValue::I32(a + b),
                         (RuntimeValue::I64(a), RuntimeValue::I64(b)) => RuntimeValue::I64(a + b),
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     BinaryOperator::Sub => match (lhs_val, rhs_val) {
                         (RuntimeValue::I32(a), RuntimeValue::I32(b)) => RuntimeValue::I32(a - b),
                         (RuntimeValue::I64(a), RuntimeValue::I64(b)) => RuntimeValue::I64(a - b),
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     BinaryOperator::Mul => match (lhs_val, rhs_val) {
                         (RuntimeValue::I32(a), RuntimeValue::I32(b)) => RuntimeValue::I32(a * b),
                         (RuntimeValue::I64(a), RuntimeValue::I64(b)) => RuntimeValue::I64(a * b),
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     BinaryOperator::Div => match (lhs_val, rhs_val) {
                         (RuntimeValue::I32(a), RuntimeValue::I32(b)) => {
@@ -341,37 +394,54 @@ impl<H: HostABI> VM<H> {
                                 return Err(VMError::DivisionByZero);
                             }
                             RuntimeValue::I32(a / b)
-                        },
+                        }
                         (RuntimeValue::I64(a), RuntimeValue::I64(b)) => {
                             if *b == 0 {
                                 return Err(VMError::DivisionByZero);
                             }
                             RuntimeValue::I64(a / b)
-                        },
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        }
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     BinaryOperator::Eq => match (lhs_val, rhs_val) {
-                        (RuntimeValue::I32(a), RuntimeValue::I32(b)) => RuntimeValue::I32(if a == b { 1 } else { 0 }),
-                        (RuntimeValue::I64(a), RuntimeValue::I64(b)) => RuntimeValue::I32(if a == b { 1 } else { 0 }),
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        (RuntimeValue::I32(a), RuntimeValue::I32(b)) => {
+                            RuntimeValue::I32(if a == b { 1 } else { 0 })
+                        }
+                        (RuntimeValue::I64(a), RuntimeValue::I64(b)) => {
+                            RuntimeValue::I32(if a == b { 1 } else { 0 })
+                        }
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     BinaryOperator::Lt => match (lhs_val, rhs_val) {
-                        (RuntimeValue::I32(a), RuntimeValue::I32(b)) => RuntimeValue::I32(if a < b { 1 } else { 0 }),
-                        (RuntimeValue::I64(a), RuntimeValue::I64(b)) => RuntimeValue::I32(if a < b { 1 } else { 0 }),
-                        _ => return Err(VMError::TypeMismatch {
-                            expected: lhs_val.get_type(),
-                            actual: rhs_val.get_type(),
-                        }),
+                        (RuntimeValue::I32(a), RuntimeValue::I32(b)) => {
+                            RuntimeValue::I32(if a < b { 1 } else { 0 })
+                        }
+                        (RuntimeValue::I64(a), RuntimeValue::I64(b)) => {
+                            RuntimeValue::I32(if a < b { 1 } else { 0 })
+                        }
+                        _ => {
+                            return Err(VMError::TypeMismatch {
+                                expected: lhs_val.get_type(),
+                                actual: rhs_val.get_type(),
+                            });
+                        }
                     },
                     // For now, return an error for unimplemented operators
                     _ => {
-                        return Err(VMError::InvalidInstruction(format!("Binary operator {:?} not yet implemented", op)));
+                        return Err(VMError::InvalidInstruction(format!(
+                            "Binary operator {:?} not yet implemented",
+                            op
+                        )));
                     }
                 };
 
@@ -380,60 +450,57 @@ impl<H: HostABI> VM<H> {
             }
 
             Instruction::UnaryOp { .. } => {
-                return Err(VMError::InvalidInstruction("Unary operations not yet implemented".to_string()));
+                return Err(VMError::InvalidInstruction(
+                    "Unary operations not yet implemented".to_string(),
+                ));
             }
 
             Instruction::Load { dest, ty, address } => {
                 let frame = self.call_stack.last().unwrap();
                 let addr_val = frame.get_value(*address)?;
-                
+
                 let addr = match addr_val {
                     RuntimeValue::Ptr(addr) => *addr,
-                    _ => return Err(VMError::TypeMismatch {
-                        expected: Type::Ptr,
-                        actual: addr_val.get_type(),
-                    }),
+                    _ => {
+                        return Err(VMError::TypeMismatch {
+                            expected: Type::Ptr,
+                            actual: addr_val.get_type(),
+                        });
+                    }
                 };
 
-                // For now, we'll implement a simple memory access using the host ABI
-                // This is a workaround since we can't directly access MemoryHostABI methods
-                // We'll simulate memory reads by using call_host_function with special internal functions
-                let result = match ty {
-                    Type::I32 => {
-                        // For simplicity, we'll use a placeholder mechanism
-                        // In a real implementation, we'd need a different architecture
-                        RuntimeValue::I32(42) // Placeholder for testing
-                    }
-                    Type::I64 => RuntimeValue::I64(100),
-                    Type::Ptr => RuntimeValue::Ptr(addr),
-                    _ => return Err(VMError::InvalidInstruction("Unsupported load type".to_string())),
-                };
+                // Use the host ABI to read the value from memory
+                let result = self.host_abi.read_memory_value(addr, *ty).map_err(|e| {
+                    VMError::InvalidInstruction(format!("Memory read error: {}", e))
+                })?;
 
                 let frame = self.call_stack.last_mut().unwrap();
                 frame.set_value(*dest, result);
             }
 
-            Instruction::Store { address, value, ty: _ } => {
+            Instruction::Store {
+                address,
+                value,
+                ty: _,
+            } => {
                 let frame = self.call_stack.last().unwrap();
                 let addr_val = frame.get_value(*address)?;
                 let val = frame.get_value(*value)?;
-                
-                let _addr = match addr_val {
+
+                let addr = match addr_val {
                     RuntimeValue::Ptr(addr) => *addr,
-                    _ => return Err(VMError::TypeMismatch {
-                        expected: Type::Ptr,
-                        actual: addr_val.get_type(),
-                    }),
+                    _ => {
+                        return Err(VMError::TypeMismatch {
+                            expected: Type::Ptr,
+                            actual: addr_val.get_type(),
+                        });
+                    }
                 };
 
-                // For now, we'll just validate the operation without actual storage
-                // In a real implementation, we'd need a different architecture
-                match val {
-                    RuntimeValue::I32(_) | RuntimeValue::I64(_) | RuntimeValue::Ptr(_) => {
-                        // Store operation succeeds (no-op for now)
-                    }
-                    _ => return Err(VMError::InvalidInstruction("Unsupported store type".to_string())),
-                }
+                // Use the host ABI to write the value to memory
+                self.host_abi.write_memory_value(addr, val).map_err(|e| {
+                    VMError::InvalidInstruction(format!("Memory write error: {}", e))
+                })?;
             }
 
             Instruction::PtrAdd { dest, ptr, offset } => {
@@ -445,10 +512,12 @@ impl<H: HostABI> VM<H> {
                     (RuntimeValue::Ptr(ptr_addr), RuntimeValue::I64(offset_bytes)) => {
                         RuntimeValue::Ptr(ptr_addr.wrapping_add(*offset_bytes as u64))
                     }
-                    _ => return Err(VMError::TypeMismatch {
-                        expected: Type::Ptr,
-                        actual: ptr_val.get_type(),
-                    }),
+                    _ => {
+                        return Err(VMError::TypeMismatch {
+                            expected: Type::Ptr,
+                            actual: ptr_val.get_type(),
+                        });
+                    }
                 };
 
                 let frame = self.call_stack.last_mut().unwrap();
@@ -474,7 +543,9 @@ impl<H: HostABI> VM<H> {
                 let size_val = frame.get_value(*size)?;
 
                 let result = if let RuntimeValue::I64(_size_bytes) = size_val {
-                    let result = self.host_abi.call_host_function("alloc", &[size_val.clone()])
+                    let result = self
+                        .host_abi
+                        .call_host_function("alloc", &[size_val.clone()])
                         .map_err(VMError::HostCallError)?;
                     result
                 } else {
@@ -493,7 +564,8 @@ impl<H: HostABI> VM<H> {
                 let ptr_val = frame.get_value(*ptr)?;
 
                 if let RuntimeValue::Ptr(_) = ptr_val {
-                    self.host_abi.call_host_function("free", &[ptr_val.clone()])
+                    self.host_abi
+                        .call_host_function("free", &[ptr_val.clone()])
                         .map_err(VMError::HostCallError)?;
                 } else {
                     return Err(VMError::TypeMismatch {
@@ -522,7 +594,7 @@ mod tests {
 
         // Create the add function: fn add(a: i32, b: i32) -> i32 { return a + b; }
         let mut func = Function::new("add".to_string(), vec![Type::I32, Type::I32], Type::I32);
-        
+
         // Create entry block
         let entry_block = BasicBlock::new(BlockId::new(0), "entry".to_string());
         func.blocks.push(entry_block);
@@ -545,7 +617,9 @@ mod tests {
         func.blocks[0].instructions.push(add_instr);
 
         // Set terminator: return result
-        func.blocks[0].terminator = Terminator::Ret { value: Some(result) };
+        func.blocks[0].terminator = Terminator::Ret {
+            value: Some(result),
+        };
 
         // Update value counter
         func.next_value_id = ValueId::new(4);
@@ -599,7 +673,7 @@ mod tests {
 
         // Create a function that calls a host function
         let mut func = Function::new("test_print".to_string(), vec![Type::I32], Type::Void);
-        
+
         // Create entry block
         let entry_block = BasicBlock::new(BlockId::new(0), "entry".to_string());
         func.blocks.push(entry_block);
