@@ -63,9 +63,16 @@ pub Type: Type = {
     "void" => Type::Void,
 };
 
-// Identifier parsing
+// Identifier parsing - allow type tokens as identifiers for variable names
 pub Identifier: &'input str = {
     "identifier" => <>,
+    // Allow type keywords to be used as variable names
+    "ptr" => "ptr",
+    "i32" => "i32", 
+    "i64" => "i64",
+    "f32" => "f32",
+    "f64" => "f64",
+    "void" => "void",
 };
 
 // String literal parsing

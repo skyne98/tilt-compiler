@@ -336,6 +336,69 @@ fn lower_instruction(
                     }
                 }
                 tilt_ast::Expression::Operation { op, args } => {
+                    // First check if this is a function call (no dot in operation name)
+                    if !op.contains('.')
+                        && *op != "ptr.add"
+                        && *op != "alloc"
+                        && *op != "free"
+                        && !op.starts_with("sizeof.")
+                    {
+                        // Check if it's a known function
+                        let function_signature = ctx.lookup_function(op).cloned();
+                        if let Some((param_types, return_type)) = function_signature {
+                            // Check argument count
+                            if args.len() != param_types.len() {
+                                ctx.error(SemanticError::ArgumentMismatch {
+                                    function: op.to_string(),
+                                    expected: param_types.len(),
+                                    found: args.len(),
+                                    location: "function call".to_string(),
+                                });
+                                return Err(());
+                            }
+
+                            // Check return type matches destination
+                            if return_type != dest.ty {
+                                ctx.error(SemanticError::TypeMismatch {
+                                    expected: dest.ty,
+                                    found: return_type,
+                                    location: "function call return type".to_string(),
+                                });
+                                return Err(());
+                            }
+
+                            // Lower arguments
+                            let mut arg_ids = Vec::new();
+                            for (i, arg) in args.iter().enumerate() {
+                                let expected_type = param_types[i];
+                                let (arg_id, arg_type) =
+                                    lower_value_with_func(ctx, func, arg, expected_type)?;
+
+                                if arg_type != expected_type {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: expected_type,
+                                        found: arg_type,
+                                        location: format!(
+                                            "argument {} to function '{}'",
+                                            i + 1,
+                                            op
+                                        ),
+                                    });
+                                    return Err(());
+                                }
+
+                                arg_ids.push(arg_id);
+                            }
+
+                            return Ok(Instruction::Call {
+                                dest: dest_value_id,
+                                function: op.to_string(),
+                                args: arg_ids,
+                                return_type,
+                            });
+                        }
+                    }
+
                     // Handle new memory operations
                     if *op == "ptr.add" {
                         // ptr.add ptr_val, offset_val

@@ -7,5 +7,12 @@ edition = "2021"
 tilt-ast = { path = "../tilt-ast" }
 tilt-parser = { path = "../tilt-parser" }
 tilt-ir = { path = "../tilt-ir" }
+tilt-ir-builder = { path = "../tilt-ir-builder" }
+tilt-vm = { path = "../tilt-vm" }
 tilt-codegen-cranelift = { path = "../tilt-codegen-cranelift" }
+tilt-host-abi = { path = "../tilt-host-abi" }
 logos = { workspace = true }
+clap = { version = "4.0", features = ["derive"] }
+colored = "3.0.0"
+rustyline = "16.0.0"
+serde_json = "1.0"

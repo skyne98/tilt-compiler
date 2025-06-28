@@ -385,6 +385,93 @@ impl IntoRuntimeValue for () {
     }
 }
 
+/// Real memory allocation Host ABI for JIT
+/// This allocates actual system memory that the JIT can directly access
+pub struct JITMemoryHostABI {
+    /// Track allocations for proper cleanup using addresses
+    allocations: std::collections::HashMap<u64, usize>, // addr -> size
+}
+
+impl JITMemoryHostABI {
+    pub fn new() -> Self {
+        Self {
+            allocations: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Allocate real memory and return the raw pointer address
+    fn allocate_real_memory(&mut self, size: u64) -> u64 {
+        if size == 0 {
+            return 0;
+        }
+
+        use std::alloc::{alloc, Layout};
+        
+        let layout = Layout::from_size_align(size as usize, 8).unwrap();
+        let ptr = unsafe { alloc(layout) };
+        
+        if ptr.is_null() {
+            return 0; // Allocation failed
+        }
+
+        let addr = ptr as u64;
+        self.allocations.insert(addr, size as usize);
+        
+        addr
+    }
+
+    /// Free real memory
+    fn free_real_memory(&mut self, addr: u64) -> Result<(), String> {
+        if addr == 0 {
+            return Ok(());
+        }
+
+        if let Some(size) = self.allocations.remove(&addr) {
+            use std::alloc::{dealloc, Layout};
+            let layout = Layout::from_size_align(size, 8).unwrap();
+            let ptr = addr as *mut u8;
+            unsafe { dealloc(ptr, layout) };
+            Ok(())
+        } else {
+            Err(format!("Attempt to free invalid address: 0x{:x}", addr))
+        }
+    }
+}
+
+impl HostABI for JITMemoryHostABI {
+    fn call_host_function(&mut self, name: &str, args: &[RuntimeValue]) -> HostResult {
+        match name {
+            "alloc" => {
+                if args.len() != 1 {
+                    return Err(format!("alloc expects 1 argument, got {}", args.len()));
+                }
+                let size = args[0].as_i64() as u64;
+                let addr = self.allocate_real_memory(size);
+                Ok(RuntimeValue::Ptr(addr))
+            }
+            
+            "free" => {
+                if args.len() != 1 {
+                    return Err(format!("free expects 1 argument, got {}", args.len()));
+                }
+                let addr = args[0].as_ptr();
+                self.free_real_memory(addr)?;
+                Ok(RuntimeValue::Void)
+            }
+            
+            // Delegate other functions to a console ABI
+            _ => {
+                let mut console_abi = ConsoleHostABI::new();
+                console_abi.call_host_function(name, args)
+            }
+        }
+    }
+
+    fn available_functions(&self) -> Vec<&str> {
+        vec!["alloc", "free", "print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

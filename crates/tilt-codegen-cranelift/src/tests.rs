@@ -207,6 +207,7 @@ fn create_test_jit() -> Result<JIT, String> {
     Ok(JIT {
         module,
         function_ids: HashMap::new(),
+        show_cranelift_ir: false,
     })
 }
 

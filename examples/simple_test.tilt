@@ -1,0 +1,5 @@
+fn main() -> i32 {
+entry:
+    result:i32 = i32.const(42)
+    ret (result)
+}

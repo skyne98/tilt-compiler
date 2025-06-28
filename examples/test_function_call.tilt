@@ -1,0 +1,13 @@
+fn add_numbers() -> i32 {
+entry:
+    a:i32 = i32.const(10)
+    b:i32 = i32.const(20)
+    result:i32 = i32.add(a, b)
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = add_numbers()
+    ret (result)
+}

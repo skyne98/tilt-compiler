@@ -1,0 +1,29 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+fn test_memory() -> i32 {
+entry:
+    size:i64 = i64.const(16)
+    ptr:ptr = alloc(size)
+    
+    val1:i32 = i32.const(100)
+    i32.store(ptr, val1)
+    
+    offset:i64 = sizeof.i32()
+    ptr2:ptr = ptr.add(ptr, offset)
+    val2:i32 = i32.const(200)
+    i32.store(ptr2, val2)
+    
+    loaded1:i32 = i32.load(ptr)
+    loaded2:i32 = i32.load(ptr2)
+    result:i32 = i32.add(loaded1, loaded2)
+    
+    free(ptr)
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_memory()
+    ret (result)
+}

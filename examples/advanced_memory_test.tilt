@@ -1,0 +1,59 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+# Advanced memory operations test demonstrating all TILT features
+fn complex_memory_test() -> i32 {
+entry:
+    # Allocate memory for an array of 5 i32 values
+    element_size:i64 = sizeof.i32()
+    count:i64 = i64.const(5)
+    total_size:i64 = i64.mul(element_size, count)
+    array_ptr:ptr = alloc(total_size)
+
+    # Initialize array with values [10, 20, 30, 40, 50]
+    val1:i32 = i32.const(10)
+    i32.store(array_ptr, val1)
+
+    offset1:i64 = sizeof.i32()
+    ptr1:ptr = ptr.add(array_ptr, offset1)
+    val2:i32 = i32.const(20)
+    i32.store(ptr1, val2)
+
+    offset2:i64 = i64.mul(element_size, i64.const(2))
+    ptr2:ptr = ptr.add(array_ptr, offset2)
+    val3:i32 = i32.const(30)
+    i32.store(ptr2, val3)
+
+    offset3:i64 = i64.mul(element_size, i64.const(3))
+    ptr3:ptr = ptr.add(array_ptr, offset3)
+    val4:i32 = i32.const(40)
+    i32.store(ptr3, val4)
+
+    offset4:i64 = i64.mul(element_size, i64.const(4))
+    ptr4:ptr = ptr.add(array_ptr, offset4)
+    val5:i32 = i32.const(50)
+    i32.store(ptr4, val5)
+
+    # Calculate sum: 10 + 20 + 30 + 40 + 50 = 150
+    loaded1:i32 = i32.load(array_ptr)
+    loaded2:i32 = i32.load(ptr1)
+    loaded3:i32 = i32.load(ptr2)
+    loaded4:i32 = i32.load(ptr3)
+    loaded5:i32 = i32.load(ptr4)
+    
+    sum1:i32 = i32.add(loaded1, loaded2)
+    sum2:i32 = i32.add(sum1, loaded3)
+    sum3:i32 = i32.add(sum2, loaded4)
+    sum:i32 = i32.add(sum3, loaded5)
+
+    # Clean up
+    free(array_ptr)
+    
+    ret (sum)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = complex_memory_test()
+    ret (result)
+}

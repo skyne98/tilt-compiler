@@ -11,7 +11,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::HashMap;
 use tilt_ast::Type as IRType;
-use tilt_host_abi::{HostABI, RuntimeValue};
+use tilt_host_abi::{HostABI, RuntimeValue, JITMemoryHostABI};
 use tilt_ir::{
     BinaryOperator, BlockId, Function as IRFunction, Instruction, Program, Terminator,
     UnaryOperator, ValueId,
@@ -19,6 +19,9 @@ use tilt_ir::{
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod memory_jit_tests;
 
 /// Global static to hold the Host ABI instance for JIT host function calls.
 /// This is a workaround for Cranelift's requirement that host functions be static.
@@ -30,11 +33,13 @@ pub struct JIT {
     module: JITModule,
     /// Function IDs for imports and declared functions
     function_ids: HashMap<String, FuncId>,
+    /// Whether to show Cranelift IR during compilation
+    show_cranelift_ir: bool,
 }
 
 impl JIT {
     pub fn new() -> Result<Self, String> {
-        Self::new_with_abi(Box::new(tilt_host_abi::ConsoleHostABI::new()))
+        Self::new_with_abi(Box::new(JITMemoryHostABI::new()))
     }
 
     pub fn new_with_abi(host_abi: Box<dyn HostABI + Send + Sync>) -> Result<Self, String> {
@@ -64,6 +69,7 @@ impl JIT {
         Ok(Self {
             module,
             function_ids: HashMap::new(),
+            show_cranelift_ir: false,
         })
     }
 
@@ -133,6 +139,11 @@ impl JIT {
         Some(self.module.get_finalized_function(func_id))
     }
 
+    /// Enable or disable Cranelift IR output during compilation
+    pub fn set_show_cranelift_ir(&mut self, show: bool) {
+        self.show_cranelift_ir = show;
+    }
+
     fn translate_function(&mut self, func: &IRFunction) -> Result<(), String> {
         let func_id = self
             .function_ids
@@ -164,6 +175,13 @@ impl JIT {
             value_map: HashMap::new(),
         };
         translator.translate()?;
+
+        // Show Cranelift IR if requested
+        if self.show_cranelift_ir {
+            println!("🔧 Cranelift IR for function '{}':", func.name);
+            println!("{}", ctx.func.display());
+            println!();
+        }
 
         // Define the function body.
         self.module
@@ -387,6 +405,10 @@ impl<'a> Translator<'a> {
                 let addr_val = self.get_value_or_constant(*address)?;
                 let val = self.get_value_or_constant(*value)?;
 
+                // Debug: Print the address being stored to
+                // Note: This would require runtime printing which we can't do here
+                // Let's add a comment for now and fix the actual issue
+                
                 self.builder.ins().store(MemFlags::new(), val, addr_val, 0);
                 Ok(())
             }
