@@ -97,6 +97,14 @@ impl Default for ConsoleHostABI {
 impl HostABI for ConsoleHostABI {
     fn call_host_function(&mut self, name: &str, args: &[RuntimeValue]) -> HostResult {
         match name {
+            "print_hello" => {
+                if !args.is_empty() {
+                    return Err(format!("print_hello expects 0 arguments, got {}", args.len()));
+                }
+                println!("Hello from TILT!");
+                Ok(RuntimeValue::Void)
+            }
+            
             "print_i32" => {
                 if args.len() != 1 {
                     return Err(format!("print_i32 expects 1 argument, got {}", args.len()));
@@ -163,7 +171,7 @@ impl HostABI for ConsoleHostABI {
     }
 
     fn available_functions(&self) -> Vec<&str> {
-        vec!["print_i32", "print_i64", "print_char", "println", "read_i32"]
+        vec!["print_hello", "print_i32", "print_i64", "print_char", "println", "read_i32"]
     }
 }
 
@@ -246,6 +254,7 @@ mod tests {
         let abi = ConsoleHostABI::new();
         let functions = abi.available_functions();
         
+        assert!(functions.contains(&"print_hello"));
         assert!(functions.contains(&"print_i32"));
         assert!(functions.contains(&"print_i64"));
         assert!(functions.contains(&"print_char"));

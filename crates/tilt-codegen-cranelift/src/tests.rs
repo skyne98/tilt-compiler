@@ -843,5 +843,57 @@ entry:
         // TODO: Complete the IR builder integration once module exports are fixed
         println!("IR Builder API has been implemented and is ready for integration!");
         assert_eq!(2 + 2, 4);
+    }    
+    #[test]
+    fn test_host_abi_integration_with_jit() {
+        // Test that we can create a JIT with the default ConsoleHostABI
+        let jit_result = JIT::new();
+        assert!(jit_result.is_ok(), "Failed to create JIT with default ConsoleHostABI");
+        
+        println!("✓ JIT successfully created with ConsoleHostABI integration");
+    }
+
+    #[test]
+    fn test_custom_host_abi_with_jit() {
+        use tilt_host_abi::{HostABI, RuntimeValue, HostResult};
+        use std::sync::{Arc, Mutex};
+        
+        // Create a custom Host ABI for testing (using Arc<Mutex<>> for thread safety)
+        struct TestHostABI {
+            call_count: Arc<Mutex<i32>>,
+        }
+        
+        impl TestHostABI {
+            fn new() -> Self {
+                Self {
+                    call_count: Arc::new(Mutex::new(0)),
+                }
+            }
+            
+            fn get_call_count(&self) -> i32 {
+                *self.call_count.lock().unwrap()
+            }
+        }
+        
+        impl HostABI for TestHostABI {
+            fn call_host_function(&mut self, name: &str, _args: &[RuntimeValue]) -> HostResult {
+                *self.call_count.lock().unwrap() += 1;
+                match name {
+                    "print_i32" | "print_char" | "print_hello" => Ok(RuntimeValue::Void),
+                    _ => Err(format!("Unknown function: {}", name)),
+                }
+            }
+            
+            fn available_functions(&self) -> Vec<&str> {
+                vec!["print_i32", "print_char", "print_hello"]
+            }
+        }
+        
+        // Test that we can create a JIT with the custom Host ABI
+        let test_abi = Box::new(TestHostABI::new());
+        let jit_result = JIT::new_with_abi(test_abi);
+        assert!(jit_result.is_ok(), "Failed to create JIT with custom Host ABI");
+        
+        println!("✓ JIT successfully created with custom Host ABI integration");
     }
 }

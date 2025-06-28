@@ -8,6 +8,8 @@
 use super::*;
 use tilt_parser::{Token, ProgramParser};
 use tilt_ir::lower_program;
+use tilt_host_abi::{ConsoleHostABI, HostABI, RuntimeValue, HostResult};
+
 use logos::Logos;
 use std::mem;
 use std::cell::RefCell;
@@ -637,5 +639,99 @@ entry:
 
         let result = compile_and_run(source);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_host_abi_integration_with_jit() {
+        // Create a simple program that uses host functions
+        let program_source = r#"
+import "env" "print_i32" (val: i32) -> void
+
+fn test() -> void {
+entry:
+    call print_i32(42)
+    ret
+}
+"#;
+
+        // Parse the program
+        let tokens: Vec<Token> = Token::lexer(program_source).collect::<Result<Vec<_>, _>>().unwrap();
+        let parser = ProgramParser::new();
+        let ast = parser.parse(tokens.into_iter()).unwrap();
+        let ir_program = tilt_ir::lower_program(&ast).unwrap();
+
+        // Test with JIT using Host ABI
+        let mut jit = JIT::new().expect("Failed to create JIT");
+        jit.compile(&ir_program).expect("Failed to compile program");
+        
+        // This should work without errors, demonstrating Host ABI integration
+        let result = jit.call_function("test", &[]);
+        assert!(result.is_ok(), "JIT execution with Host ABI failed");
+    }
+
+    #[test]
+    fn test_custom_host_abi_with_jit() {
+        // Create a custom Host ABI for testing
+        struct TestHostABI {
+            call_count: std::cell::RefCell<i32>,
+        }
+        
+        impl TestHostABI {
+            fn new() -> Self {
+                Self {
+                    call_count: std::cell::RefCell::new(0),
+                }
+            }
+            
+            fn get_call_count(&self) -> i32 {
+                *self.call_count.borrow()
+            }
+        }
+        
+        impl HostABI for TestHostABI {
+            fn call_host_function(&mut self, name: &str, _args: &[RuntimeValue]) -> HostResult {
+                *self.call_count.borrow_mut() += 1;
+                match name {
+                    "print_i32" | "print_char" | "print_hello" => Ok(RuntimeValue::Void),
+                    _ => Err(format!("Unknown function: {}", name)),
+                }
+            }
+            
+            fn available_functions(&self) -> Vec<&str> {
+                vec!["print_i32", "print_char", "print_hello"]
+            }
+        }
+        
+        // Create a JIT with the custom Host ABI
+        let test_abi = Box::new(TestHostABI::new());
+        let test_abi_ptr = test_abi.as_ref() as *const TestHostABI;
+        
+        let mut jit = JIT::new_with_abi(test_abi).expect("Failed to create JIT with custom ABI");
+        
+        // Create a simple program
+        let program_source = r#"
+import "env" "print_hello" -> void
+
+fn test() -> void {
+entry:
+    call print_hello()
+    ret
+}
+"#;
+
+        let tokens: Vec<Token> = Token::lexer(program_source).collect::<Result<Vec<_>, _>>().unwrap();
+        let parser = ProgramParser::new();
+        let ast = parser.parse(tokens.into_iter()).unwrap();
+        let ir_program = tilt_ir::lower_program(&ast).unwrap();
+
+        jit.compile(&ir_program).expect("Failed to compile program");
+        let result = jit.call_function("test", &[]);
+        assert!(result.is_ok(), "JIT execution with custom Host ABI failed");
+        
+        // Verify that the custom ABI was called
+        unsafe {
+            let test_abi_ref = &*test_abi_ptr;
+            assert!(test_abi_ref.get_call_count() > 0, "Custom Host ABI was not called");
+        }
     }
 }

@@ -805,6 +805,7 @@ dependencies = [
  "logos",
  "target-lexicon",
  "tilt-ast",
+ "tilt-host-abi",
  "tilt-ir",
  "tilt-ir-builder",
  "tilt-parser",

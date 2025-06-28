@@ -18,6 +18,7 @@ target-lexicon = { workspace = true, default-features = false }
 # We need our own IR definitions
 tilt-ir = { path = "../tilt-ir" }
 tilt-ast = { path = "../tilt-ast" }
+tilt-host-abi = { path = "../tilt-host-abi" }
 
 [dev-dependencies]
 # For testing, we need the parser and lexer

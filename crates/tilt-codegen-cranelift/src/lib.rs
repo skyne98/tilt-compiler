@@ -11,6 +11,7 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::HashMap;
 use tilt_ast::Type as IRType;
+use tilt_host_abi::{HostABI, RuntimeValue};
 use tilt_ir::{
     BinaryOperator, BlockId, Function as IRFunction, Instruction, Program, Terminator,
     UnaryOperator, ValueId,
@@ -18,6 +19,11 @@ use tilt_ir::{
 
 #[cfg(test)]
 mod tests;
+
+/// Global static to hold the Host ABI instance for JIT host function calls.
+/// This is a workaround for Cranelift's requirement that host functions be static.
+static mut GLOBAL_HOST_ABI: Option<Box<dyn HostABI + Send + Sync>> = None;
+static mut HOST_ABI_INITIALIZED: bool = false;
 
 pub struct JIT {
     /// The main JIT module, which manages function compilation and linking.
@@ -28,62 +34,27 @@ pub struct JIT {
 
 impl JIT {
     pub fn new() -> Result<Self, String> {
-        // Create a JIT builder. We can register host functions (like putc) here.
+        Self::new_with_abi(Box::new(tilt_host_abi::ConsoleHostABI::new()))
+    }
+
+    pub fn new_with_abi(host_abi: Box<dyn HostABI + Send + Sync>) -> Result<Self, String> {
+        // Initialize the global Host ABI (unsafe due to global state)
+        unsafe {
+            GLOBAL_HOST_ABI = Some(host_abi);
+            HOST_ABI_INITIALIZED = true;
+        }
+
+        // Create a JIT builder. We register dynamic host functions here.
         let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
             .map_err(|e| format!("Failed to create JIT builder: {}", e))?;
 
-        // Register host functions
+        // Register host functions that will dynamically dispatch to the Host ABI
         builder.symbol("print_hello", host_print_hello as *const u8);
         builder.symbol("print_char", host_print_char as *const u8);
-        builder.symbol("getc", host_getc as *const u8);
-        
-        // Arithmetic operators
-        builder.symbol("add", host_add as *const u8);
-        builder.symbol("sub", host_sub as *const u8);
-        builder.symbol("mul", host_mul as *const u8);
-        builder.symbol("div", host_div as *const u8);
-        builder.symbol("mod", host_mod as *const u8);
-        
-        // Comparison operators
-        builder.symbol("eq", host_eq as *const u8);
-        builder.symbol("ne", host_ne as *const u8);
-        builder.symbol("lt", host_lt as *const u8);
-        builder.symbol("le", host_le as *const u8);
-        builder.symbol("gt", host_gt as *const u8);
-        builder.symbol("ge", host_ge as *const u8);
-        
-        // Logical operators
-        builder.symbol("and", host_and as *const u8);
-        builder.symbol("or", host_or as *const u8);
-        builder.symbol("not", host_not as *const u8);
-        
-        // Bitwise operators
-        builder.symbol("bitand", host_bitand as *const u8);
-        builder.symbol("bitor", host_bitor as *const u8);
-        builder.symbol("bitxor", host_bitxor as *const u8);
-        builder.symbol("bitnot", host_bitnot as *const u8);
-        builder.symbol("shl", host_shl as *const u8);
-        builder.symbol("shr", host_shr as *const u8);
-        builder.symbol("add", host_add as *const u8);
-        builder.symbol("sub", host_sub as *const u8);
-        builder.symbol("mul", host_mul as *const u8);
-        builder.symbol("div", host_div as *const u8);
-        builder.symbol("mod", host_mod as *const u8);
-        builder.symbol("eq", host_eq as *const u8);
-        builder.symbol("ne", host_ne as *const u8);
-        builder.symbol("lt", host_lt as *const u8);
-        builder.symbol("le", host_le as *const u8);
-        builder.symbol("gt", host_gt as *const u8);
-        builder.symbol("ge", host_ge as *const u8);
-        builder.symbol("and", host_and as *const u8);
-        builder.symbol("or", host_or as *const u8);
-        builder.symbol("not", host_not as *const u8);
-        builder.symbol("bitand", host_bitand as *const u8);
-        builder.symbol("bitor", host_bitor as *const u8);
-        builder.symbol("bitxor", host_bitxor as *const u8);
-        builder.symbol("bitnot", host_bitnot as *const u8);
-        builder.symbol("shl", host_shl as *const u8);
-        builder.symbol("shr", host_shr as *const u8);
+        builder.symbol("print_i32", host_print_i32 as *const u8);
+        builder.symbol("print_i64", host_print_i64 as *const u8);
+        builder.symbol("println", host_println as *const u8);
+        builder.symbol("read_i32", host_read_i32 as *const u8);
 
         // Create the JIT module.
         let module = JITModule::new(builder);
@@ -242,14 +213,14 @@ impl<'a> Translator<'a> {
             .block_map
             .get(&self.tilt_func.entry_block)
             .ok_or("Entry block not found")?;
-        
+
         // Add function parameters as block parameters to the entry block
         for (i, param_type) in self.tilt_func.params.iter().enumerate() {
             let cl_type = translate_type(param_type);
             let cl_value = self.builder.append_block_param(*entry_block, cl_type);
             self.value_map.insert(ValueId::new(i), cl_value);
         }
-        
+
         self.builder.switch_to_block(*entry_block);
 
         // 3. Now, iterate and translate the contents of every block.
@@ -412,7 +383,10 @@ impl<'a> Translator<'a> {
                 let addr_val = self.get_value_or_constant(*address)?;
 
                 let cl_type = translate_type(ty);
-                let result = self.builder.ins().load(cl_type, MemFlags::new(), addr_val, 0);
+                let result = self
+                    .builder
+                    .ins()
+                    .load(cl_type, MemFlags::new(), addr_val, 0);
                 self.value_map.insert(*dest, result);
                 Ok(())
             }
@@ -422,7 +396,8 @@ impl<'a> Translator<'a> {
     fn translate_terminator(&mut self, term: &Terminator) -> Result<(), String> {
         match term {
             Terminator::Ret { value } => {
-                if let Some(val_id) = value {                let cl_value = self.get_value_or_constant(*val_id)?;
+                if let Some(val_id) = value {
+                    let cl_value = self.get_value_or_constant(*val_id)?;
                     self.builder.ins().return_(&[cl_value]);
                 } else {
                     self.builder.ins().return_(&[]);
@@ -501,118 +476,60 @@ fn translate_type(ir_type: &IRType) -> types::Type {
     }
 }
 
-// Host function implementations
+// Host function implementations that dispatch to the Host ABI
+// These functions are registered with Cranelift and called from JIT'd code
+
+/// Helper function to safely call the global Host ABI
+unsafe fn call_host_abi(function_name: &str, args: &[RuntimeValue]) -> RuntimeValue {
+    if let Some(ref mut abi) = GLOBAL_HOST_ABI {
+        match abi.call_host_function(function_name, args) {
+            Ok(result) => result,
+            Err(err) => {
+                eprintln!("Host function error: {}", err);
+                RuntimeValue::Void
+            }
+        }
+    } else {
+        eprintln!("Host ABI not initialized");
+        RuntimeValue::Void
+    }
+}
+
 fn host_print_hello() {
-    println!("Hello from TILT!");
+    unsafe {
+        call_host_abi("print_hello", &[]);
+    }
 }
 
 fn host_print_char(c: i32) {
-    // Convert i32 to ASCII character
-    // For 0-9, convert to ASCII digits; for other values, use as ASCII codes
-    if c >= 0 && c <= 9 {
-        print!("{}", (c + 48) as u8 as char); // Convert digit to ASCII ('0' = 48, '1' = 49, etc.)
-    } else if c >= 32 && c <= 126 {
-        print!("{}", c as u8 as char); // Printable ASCII range
-    } else {
-        print!("?"); // Non-printable
-    }
-    std::io::Write::flush(&mut std::io::stdout()).ok();
-}
-
-fn host_getc() -> i32 {
-    // For testing, return a fixed value
-    // In a real implementation, this would read from stdin
-    65 // ASCII 'A'
-}
-
-// Arithmetic operators
-fn host_add(a: i32, b: i32) -> i32 {
-    a + b
-}
-
-fn host_sub(a: i32, b: i32) -> i32 {
-    a - b
-}
-
-fn host_mul(a: i32, b: i32) -> i32 {
-    a * b
-}
-
-fn host_div(a: i32, b: i32) -> i32 {
-    if b == 0 {
-        0 // Avoid division by zero
-    } else {
-        a / b
+    unsafe {
+        call_host_abi("print_char", &[RuntimeValue::I32(c)]);
     }
 }
 
-fn host_mod(a: i32, b: i32) -> i32 {
-    if b == 0 {
-        0 // Avoid division by zero
-    } else {
-        a % b
+fn host_print_i32(value: i32) {
+    unsafe {
+        call_host_abi("print_i32", &[RuntimeValue::I32(value)]);
     }
 }
 
-// Comparison operators (return i32 instead of bool for ABI compatibility)
-fn host_eq(a: i32, b: i32) -> i32 {
-    if a == b { 1 } else { 0 }
+fn host_print_i64(value: i64) {
+    unsafe {
+        call_host_abi("print_i64", &[RuntimeValue::I64(value)]);
+    }
 }
 
-fn host_ne(a: i32, b: i32) -> i32 {
-    if a != b { 1 } else { 0 }
+fn host_println() {
+    unsafe {
+        call_host_abi("println", &[]);
+    }
 }
 
-fn host_lt(a: i32, b: i32) -> i32 {
-    if a < b { 1 } else { 0 }
-}
-
-fn host_le(a: i32, b: i32) -> i32 {
-    if a <= b { 1 } else { 0 }
-}
-
-fn host_gt(a: i32, b: i32) -> i32 {
-    if a > b { 1 } else { 0 }
-}
-
-fn host_ge(a: i32, b: i32) -> i32 {
-    if a >= b { 1 } else { 0 }
-}
-
-// Logical operators (operate on i32 values, 0 = false, non-zero = true)
-fn host_and(a: i32, b: i32) -> i32 {
-    if a != 0 && b != 0 { 1 } else { 0 }
-}
-
-fn host_or(a: i32, b: i32) -> i32 {
-    if a != 0 || b != 0 { 1 } else { 0 }
-}
-
-fn host_not(a: i32) -> i32 {
-    if a == 0 { 1 } else { 0 }
-}
-
-// Bitwise operators
-fn host_bitand(a: i32, b: i32) -> i32 {
-    a & b
-}
-
-fn host_bitor(a: i32, b: i32) -> i32 {
-    a | b
-}
-
-fn host_bitxor(a: i32, b: i32) -> i32 {
-    a ^ b
-}
-
-fn host_bitnot(a: i32) -> i32 {
-    !a
-}
-
-fn host_shl(a: i32, b: i32) -> i32 {
-    a << b
-}
-
-fn host_shr(a: i32, b: i32) -> i32 {
-    a >> b
+fn host_read_i32() -> i32 {
+    unsafe {
+        match call_host_abi("read_i32", &[]) {
+            RuntimeValue::I32(val) => val,
+            _ => 0, // Default value on error
+        }
+    }
 }
