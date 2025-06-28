@@ -208,17 +208,25 @@ impl<'a> Translator<'a> {
             }
         }
 
-        // 2. Handle function parameters by switching to entry block and adding them as block params
+        // 2. Handle function parameters: check if they're already in entry block, if not add them
         let entry_block = self
             .block_map
             .get(&self.tilt_func.entry_block)
             .ok_or("Entry block not found")?;
 
-        // Add function parameters as block parameters to the entry block
-        for (i, param_type) in self.tilt_func.params.iter().enumerate() {
-            let cl_type = translate_type(param_type);
-            let cl_value = self.builder.append_block_param(*entry_block, cl_type);
-            self.value_map.insert(ValueId::new(i), cl_value);
+        // Check if the entry block already has function parameters
+        let entry_block_data = self.tilt_func.blocks.iter()
+            .find(|b| b.id == self.tilt_func.entry_block)
+            .ok_or("Entry block data not found")?;
+        
+        // If the entry block doesn't have parameters matching the function signature,
+        // add them as block parameters (for manually constructed IR)
+        if entry_block_data.params.len() != self.tilt_func.params.len() {
+            for (i, param_type) in self.tilt_func.params.iter().enumerate() {
+                let cl_type = translate_type(param_type);
+                let cl_value = self.builder.append_block_param(*entry_block, cl_type);
+                self.value_map.insert(ValueId::new(i), cl_value);
+            }
         }
 
         self.builder.switch_to_block(*entry_block);

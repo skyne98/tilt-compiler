@@ -820,6 +820,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tilt-integration-tests"
+version = "0.1.0"
+dependencies = [
+ "tilt-ast",
+ "tilt-codegen-cranelift",
+ "tilt-host-abi",
+ "tilt-ir",
+ "tilt-ir-builder",
+ "tilt-vm",
+]
+
+[[package]]
 name = "tilt-ir"
 version = "0.1.0"
 dependencies = [

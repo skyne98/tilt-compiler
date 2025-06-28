@@ -1,0 +1,12 @@
+[package]
+name = "tilt-integration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tilt-ast = { path = "../tilt-ast" }
+tilt-ir = { path = "../tilt-ir" }
+tilt-ir-builder = { path = "../tilt-ir-builder" }
+tilt-host-abi = { path = "../tilt-host-abi" }
+tilt-vm = { path = "../tilt-vm" }
+tilt-codegen-cranelift = { path = "../tilt-codegen-cranelift" }
