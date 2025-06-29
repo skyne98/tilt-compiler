@@ -223,12 +223,8 @@ fn start_repl(mut options: CompilerOptions) {
 
     loop {
         line_count += 1;
-        let prompt = format!(
-            "{}[{}]{} ",
-            "tilt".cyan().bold(),
-            line_count.to_string().yellow(),
-            ">".cyan()
-        );
+        // Use a simple prompt without colors to avoid rustyline issues
+        let prompt = format!("tilt[{}]> ", line_count);
 
         let readline = rl.readline(&prompt);
         match readline {
