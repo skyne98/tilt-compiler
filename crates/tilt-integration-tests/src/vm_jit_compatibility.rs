@@ -58,7 +58,7 @@ fn test_vm_jit_compatibility(
                 let arg0 = match &args[0] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 
@@ -79,13 +79,13 @@ fn test_vm_jit_compatibility(
                 let arg0 = match &args[0] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 let arg1 = match &args[1] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 
@@ -106,19 +106,19 @@ fn test_vm_jit_compatibility(
                 let arg0 = match &args[0] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 let arg1 = match &args[1] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 let arg2 = match &args[2] {
                     RuntimeValue::I32(val) => *val,
                     RuntimeValue::I64(val) => *val as i32,
-                    RuntimeValue::Ptr(val) => *val as i32,
+                    RuntimeValue::Usize(val) => *val as i32,
                     RuntimeValue::Void => 0,
                 };
                 

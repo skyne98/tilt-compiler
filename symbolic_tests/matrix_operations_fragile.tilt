@@ -1,0 +1,245 @@
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
+
+# Emulate a 2D matrix of i32 values with dynamic allocation
+# Matrix layout: rows * cols * sizeof(i32) bytes
+# Element at (row, col) is at offset: (row * cols + col) * sizeof(i32)
+
+fn matrix_create(rows:i32, cols:i32) -> usize {
+entry:
+    # Convert i32 to usize
+    rows_usize:usize = i32.to_usize(rows)
+    cols_usize:usize = i32.to_usize(cols)
+    
+    total_elements:usize = usize.mul(rows_usize, cols_usize)
+    element_size:usize = sizeof.i32()
+    total_size:usize = usize.mul(total_elements, element_size)
+    
+    matrix_ptr:usize = alloc(total_size)
+    ret (matrix_ptr)
+}
+
+fn matrix_get_offset(row:i32, col:i32, cols:i32) -> usize {
+entry:
+    # Convert i32 to usize
+    row_usize:usize = i32.to_usize(row)
+    col_usize:usize = i32.to_usize(col)
+    cols_usize:usize = i32.to_usize(cols)
+    
+    # Calculate offset: (row * cols + col) * sizeof(i32)
+    row_offset:usize = usize.mul(row_usize, cols_usize)
+    linear_index:usize = usize.add(row_offset, col_usize)
+    element_size:usize = sizeof.i32()
+    byte_offset:usize = usize.mul(linear_index, element_size)
+    
+    ret (byte_offset)
+}
+
+fn matrix_set(matrix:usize, row:i32, col:i32, cols:i32, value:i32) -> void {
+entry:
+    offset:usize = matrix_get_offset(row, col, cols)
+    element_ptr:usize = usize.add(matrix, offset)
+    i32.store(element_ptr, value)
+    ret
+}
+
+fn matrix_get(matrix:usize, row:i32, col:i32, cols:i32) -> i32 {
+entry:
+    offset:usize = matrix_get_offset(row, col, cols)
+    element_ptr:usize = usize.add(matrix, offset)
+    value:i32 = i32.load(element_ptr)
+    ret (value)
+}
+
+fn matrix_destroy(matrix:usize) -> void {
+entry:
+    free(matrix)
+    ret
+}
+
+# Recursive function to fill matrix with fibonacci-like pattern
+fn recursive_fill_fibonacci(matrix:usize, row:i32, col:i32, rows:i32, cols:i32, prev1:i32, prev2:i32) -> void {
+entry:
+    # Base case: reached end of matrix
+    end_condition:i32 = i32.eq(row, rows)
+    br_if end_condition, base_case, continue_fill
+
+base_case:
+    ret
+
+continue_fill:
+    # Calculate next fibonacci value
+    current:i32 = i32.add(prev1, prev2)
+    matrix_set(matrix, row, col, cols, current)
+    
+    # Calculate next position
+    next_col:i32 = i32.add(col, i32.const(1))
+    col_overflow:i32 = i32.eq(next_col, cols)
+    br_if col_overflow, next_row, same_row
+
+next_row:
+    next_row_val:i32 = i32.add(row, i32.const(1))
+    zero_col:i32 = i32.const(0)
+    recursive_fill_fibonacci(matrix, next_row_val, zero_col, rows, cols, prev2, current)
+    ret
+
+same_row:
+    recursive_fill_fibonacci(matrix, row, next_col, rows, cols, prev2, current)
+    ret
+}
+
+# Iterative matrix multiplication (result = m1 * m2)
+fn matrix_multiply_iterative(m1:usize, m2:usize, result:usize, rows1:i32, cols1:i32, cols2:i32) -> void {
+entry:
+    i:i32 = i32.const(0)
+    br outer_loop
+
+outer_loop:
+    i_condition:i32 = i32.lt(i, rows1)
+    br_if i_condition, outer_body, outer_done
+
+outer_body:
+    j:i32 = i32.const(0)
+    br inner_loop
+
+inner_loop:
+    j_condition:i32 = i32.lt(j, cols2)
+    br_if j_condition, inner_body, inner_done
+
+inner_body:
+    # Calculate dot product for result[i][j]
+    sum:i32 = i32.const(0)
+    k:i32 = i32.const(0)
+    br dot_loop
+
+dot_loop:
+    k_condition:i32 = i32.lt(k, cols1)
+    br_if k_condition, dot_body, dot_done
+
+dot_body:
+    # Get m1[i][k] and m2[k][j]
+    m1_val:i32 = matrix_get(m1, i, k, cols1)
+    m2_val:i32 = matrix_get(m2, k, j, cols2)
+    product:i32 = i32.mul(m1_val, m2_val)
+    sum = i32.add(sum, product)
+    
+    k = i32.add(k, i32.const(1))
+    br dot_loop
+
+dot_done:
+    # Store result[i][j] = sum
+    matrix_set(result, i, j, cols2, sum)
+    
+    j = i32.add(j, i32.const(1))
+    br inner_loop
+
+inner_done:
+    i = i32.add(i, i32.const(1))
+    br outer_loop
+
+outer_done:
+    ret
+}
+
+# Nested function calls for matrix operations
+fn complex_matrix_operations(matrix:usize, rows:i32, cols:i32) -> i32 {
+entry:
+    # Step 1: Fill with fibonacci pattern using recursion
+    fib1:i32 = i32.const(1)
+    fib2:i32 = i32.const(1)
+    start_row:i32 = i32.const(0)
+    start_col:i32 = i32.const(0)
+    recursive_fill_fibonacci(matrix, start_row, start_col, rows, cols, fib1, fib2)
+    
+    # Step 2: Create identity matrix for multiplication
+    identity:usize = matrix_create(cols, cols)
+    diagonal_idx:i32 = i32.const(0)
+    br identity_loop
+
+identity_loop:
+    diag_condition:i32 = i32.lt(diagonal_idx, cols)
+    br_if diag_condition, diag_body, diag_done
+
+diag_body:
+    one:i32 = i32.const(1)
+    matrix_set(identity, diagonal_idx, diagonal_idx, cols, one)
+    diagonal_idx = i32.add(diagonal_idx, i32.const(1))
+    br identity_loop
+
+diag_done:
+    # Step 3: Multiply matrix by identity (should give same matrix)
+    result_matrix:usize = matrix_create(rows, cols)
+    matrix_multiply_iterative(matrix, identity, result_matrix, rows, cols, cols)
+    
+    # Step 4: Calculate checksum of result using nested function calls
+    checksum:i32 = calculate_matrix_checksum(result_matrix, rows, cols)
+    
+    # Cleanup
+    matrix_destroy(identity)
+    matrix_destroy(result_matrix)
+    
+    ret (checksum)
+}
+
+# Recursive checksum calculation with alternating signs
+fn calculate_matrix_checksum(matrix:usize, rows:i32, cols:i32) -> i32 {
+entry:
+    total_sum:i32 = calculate_checksum_recursive(matrix, i32.const(0), i32.const(0), rows, cols, i32.const(1))
+    ret (total_sum)
+}
+
+fn calculate_checksum_recursive(matrix:usize, row:i32, col:i32, rows:i32, cols:i32, sign:i32) -> i32 {
+entry:
+    # Base case: past end of matrix
+    row_overflow:i32 = i32.eq(row, rows)
+    br_if row_overflow, base_case, continue_calc
+
+base_case:
+    zero:i32 = i32.const(0)
+    ret (zero)
+
+continue_calc:
+    # Get current value and apply sign
+    current_val:i32 = matrix_get(matrix, row, col, cols)
+    signed_val:i32 = i32.mul(current_val, sign)
+    
+    # Calculate next position and alternate sign
+    next_col:i32 = i32.add(col, i32.const(1))
+    next_sign:i32 = i32.mul(sign, i32.const(-1))
+    
+    col_overflow:i32 = i32.eq(next_col, cols)
+    br_if col_overflow, move_next_row, stay_same_row
+
+move_next_row:
+    next_row:i32 = i32.add(row, i32.const(1))
+    zero_col:i32 = i32.const(0)
+    rest_sum:i32 = calculate_checksum_recursive(matrix, next_row, zero_col, rows, cols, next_sign)
+    total:i32 = i32.add(signed_val, rest_sum)
+    ret (total)
+
+stay_same_row:
+    rest_sum:i32 = calculate_checksum_recursive(matrix, row, next_col, rows, cols, next_sign)
+    total:i32 = i32.add(signed_val, rest_sum)
+    ret (total)
+}
+
+fn main() -> i32 {
+entry:
+    # Create a 3x3 matrix
+    rows:i32 = i32.const(3)
+    cols:i32 = i32.const(3)
+    matrix:usize = matrix_create(rows, cols)
+    
+    # Perform complex operations
+    result:i32 = complex_matrix_operations(matrix, rows, cols)
+    
+    # Additional nested calculation for extra fragility
+    # Multiply result by the sum of matrix dimensions
+    dim_sum:i32 = i32.add(rows, cols)
+    final_result:i32 = i32.mul(result, dim_sum)
+    
+    # Cleanup
+    matrix_destroy(matrix)
+    
+    ret (final_result)
+}

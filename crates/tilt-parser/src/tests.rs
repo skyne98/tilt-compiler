@@ -10,8 +10,8 @@
 mod tests {
     use crate::lexer::Token;
     use crate::tilt;
-    use tilt_ast::*;
     use logos::Logos;
+    use tilt_ast::*;
 
     // Helper function to tokenize input
     fn tokenize(input: &str) -> Vec<Token> {
@@ -22,7 +22,7 @@ mod tests {
     fn tokenize_with_positions(input: &str) -> Vec<(usize, Token, usize)> {
         let mut lexer = Token::lexer(input);
         let mut tokens = Vec::new();
-        
+
         while let Some(token) = lexer.next() {
             let token = token.unwrap();
             let span = lexer.span();
@@ -35,35 +35,45 @@ mod tests {
     fn parse_program(input: &str) -> Result<Program, String> {
         let tokens = tokenize_with_positions(input);
         let parser = tilt::ProgramParser::new();
-        parser.parse(tokens.into_iter()).map_err(|e| format!("{:?}", e))
+        parser
+            .parse(tokens.into_iter())
+            .map_err(|e| format!("{:?}", e))
     }
 
     // Helper function to parse expressions
     fn parse_expression(input: &str) -> Result<Expression, String> {
         let tokens = tokenize_with_positions(input);
         let parser = tilt::ExpressionParser::new();
-        parser.parse(tokens.into_iter()).map_err(|e| format!("{:?}", e))
+        parser
+            .parse(tokens.into_iter())
+            .map_err(|e| format!("{:?}", e))
     }
 
     // Helper function to parse instructions
     fn parse_instruction(input: &str) -> Result<Instruction, String> {
         let tokens = tokenize_with_positions(input);
         let parser = tilt::InstructionParser::new();
-        parser.parse(tokens.into_iter()).map_err(|e| format!("{:?}", e))
+        parser
+            .parse(tokens.into_iter())
+            .map_err(|e| format!("{:?}", e))
     }
 
     // Helper function to parse terminators
     fn parse_terminator(input: &str) -> Result<Terminator, String> {
         let tokens = tokenize_with_positions(input);
         let parser = tilt::TerminatorParser::new();
-        parser.parse(tokens.into_iter()).map_err(|e| format!("{:?}", e))
+        parser
+            .parse(tokens.into_iter())
+            .map_err(|e| format!("{:?}", e))
     }
 
     // Helper function to parse blocks
     fn parse_block(input: &str) -> Result<Block, String> {
         let tokens = tokenize_with_positions(input);
         let parser = tilt::BlockParser::new();
-        parser.parse(tokens.into_iter()).map_err(|e| format!("{:?}", e))
+        parser
+            .parse(tokens.into_iter())
+            .map_err(|e| format!("{:?}", e))
     }
 
     // ===============================
@@ -74,46 +84,55 @@ mod tests {
     fn test_lexer_keywords() {
         let input = "fn import ret br br_if phi call";
         let tokens = tokenize(input);
-        assert_eq!(tokens, vec![
-            Token::Fn,
-            Token::Import,
-            Token::Ret,
-            Token::Br,
-            Token::BrIf,
-            Token::Phi,
-            Token::Call,
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Fn,
+                Token::Import,
+                Token::Ret,
+                Token::Br,
+                Token::BrIf,
+                Token::Phi,
+                Token::Call,
+            ]
+        );
     }
 
     #[test]
     fn test_lexer_types() {
         let input = "i32 i64 f32 f64 void";
         let tokens = tokenize(input);
-        assert_eq!(tokens, vec![
-            Token::TI32,
-            Token::TI64,
-            Token::TF32,
-            Token::TF64,
-            Token::TVoid,
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::TI32,
+                Token::TI64,
+                Token::TF32,
+                Token::TF64,
+                Token::TVoid,
+            ]
+        );
     }
 
     #[test]
     fn test_lexer_punctuation() {
         let input = "{ } ( ) [ ] : = , ->";
         let tokens = tokenize(input);
-        assert_eq!(tokens, vec![
-            Token::LBrace,
-            Token::RBrace,
-            Token::LParen,
-            Token::RParen,
-            Token::LBracket,
-            Token::RBracket,
-            Token::Colon,
-            Token::Equals,
-            Token::Comma,
-            Token::Arrow,
-        ]);
+        assert_eq!(
+            tokens,
+            vec![
+                Token::LBrace,
+                Token::RBrace,
+                Token::LParen,
+                Token::RParen,
+                Token::LBracket,
+                Token::RBracket,
+                Token::Colon,
+                Token::Equals,
+                Token::Comma,
+                Token::Arrow,
+            ]
+        );
     }
 
     #[test]
@@ -168,20 +187,14 @@ mod tests {
     fn test_lexer_comments() {
         let input = "fn # this is a comment\nmy_func";
         let tokens = tokenize(input);
-        assert_eq!(tokens, vec![
-            Token::Fn,
-            Token::Identifier("my_func"),
-        ]);
+        assert_eq!(tokens, vec![Token::Fn, Token::Identifier("my_func"),]);
     }
 
     #[test]
     fn test_lexer_whitespace() {
         let input = "fn\n\t  my_func\r\n";
         let tokens = tokenize(input);
-        assert_eq!(tokens, vec![
-            Token::Fn,
-            Token::Identifier("my_func"),
-        ]);
+        assert_eq!(tokens, vec![Token::Fn, Token::Identifier("my_func"),]);
     }
 
     // ===============================
@@ -191,12 +204,29 @@ mod tests {
     #[test]
     fn test_parse_types() {
         let parser = tilt::TypeParser::new();
-        
-        assert_eq!(parser.parse(vec![(0, Token::TI32, 3)].into_iter()).unwrap(), Type::I32);
-        assert_eq!(parser.parse(vec![(0, Token::TI64, 3)].into_iter()).unwrap(), Type::I64);
-        assert_eq!(parser.parse(vec![(0, Token::TF32, 3)].into_iter()).unwrap(), Type::F32);
-        assert_eq!(parser.parse(vec![(0, Token::TF64, 3)].into_iter()).unwrap(), Type::F64);
-        assert_eq!(parser.parse(vec![(0, Token::TVoid, 4)].into_iter()).unwrap(), Type::Void);
+
+        assert_eq!(
+            parser.parse(vec![(0, Token::TI32, 3)].into_iter()).unwrap(),
+            Type::I32
+        );
+        assert_eq!(
+            parser.parse(vec![(0, Token::TI64, 3)].into_iter()).unwrap(),
+            Type::I64
+        );
+        assert_eq!(
+            parser.parse(vec![(0, Token::TF32, 3)].into_iter()).unwrap(),
+            Type::F32
+        );
+        assert_eq!(
+            parser.parse(vec![(0, Token::TF64, 3)].into_iter()).unwrap(),
+            Type::F64
+        );
+        assert_eq!(
+            parser
+                .parse(vec![(0, Token::TVoid, 4)].into_iter())
+                .unwrap(),
+            Type::Void
+        );
     }
 
     // ===============================
@@ -234,28 +264,37 @@ mod tests {
     #[test]
     fn test_parse_call_no_args() {
         let result = parse_expression("call my_func()").unwrap();
-        assert_eq!(result, Expression::Call {
-            name: "my_func",
-            args: vec![]
-        });
+        assert_eq!(
+            result,
+            Expression::Call {
+                name: "my_func",
+                args: vec![]
+            }
+        );
     }
 
     #[test]
     fn test_parse_call_one_arg() {
         let result = parse_expression("call my_func(42)").unwrap();
-        assert_eq!(result, Expression::Call {
-            name: "my_func",
-            args: vec![Value::Constant(42)]
-        });
+        assert_eq!(
+            result,
+            Expression::Call {
+                name: "my_func",
+                args: vec![Value::Constant(42)]
+            }
+        );
     }
 
     #[test]
     fn test_parse_call_two_args() {
         let result = parse_expression("call my_func(x, 42)").unwrap();
-        assert_eq!(result, Expression::Call {
-            name: "my_func",
-            args: vec![Value::Variable("x"), Value::Constant(42)]
-        });
+        assert_eq!(
+            result,
+            Expression::Call {
+                name: "my_func",
+                args: vec![Value::Variable("x"), Value::Constant(42)]
+            }
+        );
     }
 
     // ===============================
@@ -265,22 +304,37 @@ mod tests {
     #[test]
     fn test_parse_instruction_assignment() {
         let result = parse_instruction("result:i32 = call my_func()").unwrap();
-        assert_eq!(result, Instruction::Assign {
-            dest: TypedIdentifier { name: "result", ty: Type::I32 },
-            expr: Expression::Call { name: "my_func", args: vec![] }
-        });
+        assert_eq!(
+            result,
+            Instruction::Assign {
+                dest: TypedIdentifier {
+                    name: "result",
+                    ty: Type::I32
+                },
+                expr: Expression::Call {
+                    name: "my_func",
+                    args: vec![]
+                }
+            }
+        );
     }
 
     #[test]
     fn test_parse_instruction_assignment_with_args() {
         let result = parse_instruction("sum:i64 = call add_func(a, 10)").unwrap();
-        assert_eq!(result, Instruction::Assign {
-            dest: TypedIdentifier { name: "sum", ty: Type::I64 },
-            expr: Expression::Call { 
-                name: "add_func", 
-                args: vec![Value::Variable("a"), Value::Constant(10)]
+        assert_eq!(
+            result,
+            Instruction::Assign {
+                dest: TypedIdentifier {
+                    name: "sum",
+                    ty: Type::I64
+                },
+                expr: Expression::Call {
+                    name: "add_func",
+                    args: vec![Value::Variable("a"), Value::Constant(10)]
+                }
             }
-        });
+        );
     }
 
     // ===============================
@@ -296,27 +350,43 @@ mod tests {
     #[test]
     fn test_parse_terminator_br() {
         let result = parse_terminator("br exit").unwrap();
-        assert_eq!(result, Terminator::Br { label: "exit" });
+        assert_eq!(
+            result,
+            Terminator::Br {
+                label: "exit",
+                args: vec![]
+            }
+        );
     }
 
     #[test]
     fn test_parse_terminator_br_if() {
         let result = parse_terminator("br_if condition, true_block, false_block").unwrap();
-        assert_eq!(result, Terminator::BrIf {
-            cond: Value::Variable("condition"),
-            true_label: "true_block",
-            false_label: "false_block"
-        });
+        assert_eq!(
+            result,
+            Terminator::BrIf {
+                cond: Value::Variable("condition"),
+                true_label: "true_block",
+                false_label: "false_block",
+                true_args: vec![],
+                false_args: vec![],
+            }
+        );
     }
 
     #[test]
     fn test_parse_terminator_br_if_with_constant() {
         let result = parse_terminator("br_if 1, loop_body, exit").unwrap();
-        assert_eq!(result, Terminator::BrIf {
-            cond: Value::Constant(1),
-            true_label: "loop_body",
-            false_label: "exit"
-        });
+        assert_eq!(
+            result,
+            Terminator::BrIf {
+                cond: Value::Constant(1),
+                true_label: "loop_body",
+                false_label: "exit",
+                true_args: vec![],
+                false_args: vec![],
+            }
+        );
     }
 
     // ===============================
@@ -326,11 +396,15 @@ mod tests {
     #[test]
     fn test_parse_block_empty() {
         let result = parse_block("entry: ret").unwrap();
-        assert_eq!(result, Block {
-            label: "entry",
-            instructions: vec![],
-            terminator: Terminator::Ret(None)
-        });
+        assert_eq!(
+            result,
+            Block {
+                label: "entry",
+                params: vec![],
+                instructions: vec![],
+                terminator: Terminator::Ret(None)
+            }
+        );
     }
 
     #[test]
@@ -342,10 +416,10 @@ mod tests {
             br_if counter, loop_body, exit
         "#;
         let result = parse_block(input).unwrap();
-        
+
         assert_eq!(result.label, "loop_body");
         assert_eq!(result.instructions.len(), 2);
-        
+
         // Check first instruction
         if let Instruction::Assign { dest, expr } = &result.instructions[0] {
             assert_eq!(dest.name, "result");
@@ -355,9 +429,15 @@ mod tests {
                 assert_eq!(args.len(), 0);
             }
         }
-        
+
         // Check terminator
-        if let Terminator::BrIf { cond, true_label, false_label } = &result.terminator {
+        if let Terminator::BrIf {
+            cond,
+            true_label,
+            false_label,
+            ..
+        } = &result.terminator
+        {
             assert_eq!(*cond, Value::Variable("counter"));
             assert_eq!(*true_label, "loop_body");
             assert_eq!(*false_label, "exit");
@@ -373,14 +453,17 @@ mod tests {
         let parser = tilt::ImportDeclParser::new();
         let tokens = tokenize_with_positions(r#"import "stdlib" "print" -> void"#);
         let result = parser.parse(tokens.into_iter()).unwrap();
-        
-        assert_eq!(result, ImportDecl {
-            module: "stdlib",
-            name: "print",
-            calling_convention: None,
-            params: vec![],
-            return_type: Type::Void
-        });
+
+        assert_eq!(
+            result,
+            ImportDecl {
+                module: "stdlib",
+                name: "print",
+                calling_convention: None,
+                params: vec![],
+                return_type: Type::Void
+            }
+        );
     }
 
     #[test]
@@ -388,14 +471,17 @@ mod tests {
         let parser = tilt::ImportDeclParser::new();
         let tokens = tokenize_with_positions(r#"import "math" "sqrt" -> f64"#);
         let result = parser.parse(tokens.into_iter()).unwrap();
-        
-        assert_eq!(result, ImportDecl {
-            module: "math",
-            name: "sqrt",
-            calling_convention: None,
-            params: vec![],
-            return_type: Type::F64
-        });
+
+        assert_eq!(
+            result,
+            ImportDecl {
+                module: "math",
+                name: "sqrt",
+                calling_convention: None,
+                params: vec![],
+                return_type: Type::F64
+            }
+        );
     }
 
     // ===============================
@@ -407,17 +493,21 @@ mod tests {
         let parser = tilt::FunctionDefParser::new();
         let tokens = tokenize_with_positions("fn main() -> void { entry: ret }");
         let result = parser.parse(tokens.into_iter()).unwrap();
-        
-        assert_eq!(result, FunctionDef {
-            name: "main",
-            params: vec![],
-            return_type: Type::Void,
-            blocks: vec![Block {
-                label: "entry",
-                instructions: vec![],
-                terminator: Terminator::Ret(None)
-            }]
-        });
+
+        assert_eq!(
+            result,
+            FunctionDef {
+                name: "main",
+                params: vec![],
+                return_type: Type::Void,
+                blocks: vec![Block {
+                    label: "entry",
+                    params: vec![],
+                    instructions: vec![],
+                    terminator: Terminator::Ret(None)
+                }]
+            }
+        );
     }
 
     #[test]
@@ -435,22 +525,22 @@ mod tests {
                 ret
         }
         "#;
-        
+
         let parser = tilt::FunctionDefParser::new();
         let tokens = tokenize_with_positions(input);
         let result = parser.parse(tokens.into_iter()).unwrap();
-        
+
         assert_eq!(result.name, "test_func");
         assert_eq!(result.return_type, Type::I32);
         assert_eq!(result.blocks.len(), 3);
-        
+
         // Check entry block
         assert_eq!(result.blocks[0].label, "entry");
         assert_eq!(result.blocks[0].instructions.len(), 1);
-        
+
         // Check positive block
         assert_eq!(result.blocks[1].label, "positive");
-        
+
         // Check negative block
         assert_eq!(result.blocks[2].label, "negative");
     }
@@ -469,7 +559,7 @@ mod tests {
     fn test_parse_program_with_import() {
         let input = r#"import "stdlib" "print" -> void"#;
         let result = parse_program(input).unwrap();
-        
+
         assert_eq!(result.items.len(), 1);
         if let TopLevelItem::Import(import) = &result.items[0] {
             assert_eq!(import.module, "stdlib");
@@ -486,7 +576,7 @@ mod tests {
         }
         "#;
         let result = parse_program(input).unwrap();
-        
+
         assert_eq!(result.items.len(), 1);
         if let TopLevelItem::Function(func) = &result.items[0] {
             assert_eq!(func.name, "main");
@@ -515,28 +605,28 @@ mod tests {
                 ret
         }
         "#;
-        
+
         let result = parse_program(input).unwrap();
-        
+
         assert_eq!(result.items.len(), 4);
-        
+
         // Check imports
         if let TopLevelItem::Import(import1) = &result.items[0] {
             assert_eq!(import1.module, "stdlib");
             assert_eq!(import1.name, "print");
         }
-        
+
         if let TopLevelItem::Import(import2) = &result.items[1] {
             assert_eq!(import2.module, "math");
             assert_eq!(import2.name, "sqrt");
         }
-        
+
         // Check functions
         if let TopLevelItem::Function(func1) = &result.items[2] {
             assert_eq!(func1.name, "calculate");
             assert_eq!(func1.return_type, Type::F64);
         }
-        
+
         if let TopLevelItem::Function(func2) = &result.items[3] {
             assert_eq!(func2.name, "main");
             assert_eq!(func2.return_type, Type::Void);
@@ -630,11 +720,11 @@ mod tests {
         let input1 = "fn test()->void{entry:ret}";
         let input2 = "fn   test( )  ->  void  {  entry :  ret  }";
         let input3 = "fn\ttest()\t->\tvoid\t{\tentry:\tret\t}";
-        
+
         let result1 = parse_program(input1).unwrap();
         let result2 = parse_program(input2).unwrap();
         let result3 = parse_program(input3).unwrap();
-        
+
         assert_eq!(result1, result2);
         assert_eq!(result2, result3);
     }
@@ -649,7 +739,7 @@ mod tests {
                 ret # Comment after terminator
         } # Comment at end
         "#;
-        
+
         let result = parse_program(input).unwrap();
         if let TopLevelItem::Function(func) = &result.items[0] {
             assert_eq!(func.name, "test");
@@ -683,7 +773,7 @@ mod tests {
             unreachable: ret
         }
         "#;
-        
+
         let result = parse_program(input).unwrap();
         if let TopLevelItem::Function(func) = &result.items[0] {
             assert_eq!(func.blocks.len(), 2);
@@ -712,7 +802,7 @@ mod tests {
                 ret
         }
         "#;
-        
+
         let result = parse_program(input).unwrap();
         assert_eq!(result.items.len(), 6); // 5 imports + 1 function
     }
@@ -728,7 +818,7 @@ mod tests {
             exit: ret
         }
         "#;
-        
+
         let result = parse_program(input).unwrap();
         if let TopLevelItem::Function(func) = &result.items[0] {
             assert_eq!(func.blocks.len(), 4);

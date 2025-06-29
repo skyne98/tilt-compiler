@@ -6,11 +6,11 @@
 // ===================================================================
 
 use super::*;
-use tilt_parser::{Token, ProgramParser};
-use tilt_ir::lower_program;
 use logos::Logos;
-use std::mem;
 use std::cell::RefCell;
+use std::mem;
+use tilt_ir::lower_program;
+use tilt_parser::{ProgramParser, Token};
 
 // Global storage for capturing output from host functions
 thread_local! {
@@ -74,7 +74,11 @@ extern "C" fn test_mul(a: i32, b: i32) -> i32 {
 }
 
 extern "C" fn test_div(a: i32, b: i32) -> i32 {
-    if b != 0 { a / b } else { 0 }
+    if b != 0 {
+        a / b
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_neg(a: i32) -> i32 {
@@ -83,40 +87,76 @@ extern "C" fn test_neg(a: i32) -> i32 {
 
 // Comparison operation host functions
 extern "C" fn test_eq(a: i32, b: i32) -> i32 {
-    if a == b { 1 } else { 0 }
+    if a == b {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_ne(a: i32, b: i32) -> i32 {
-    if a != b { 1 } else { 0 }
+    if a != b {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_lt(a: i32, b: i32) -> i32 {
-    if a < b { 1 } else { 0 }
+    if a < b {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_le(a: i32, b: i32) -> i32 {
-    if a <= b { 1 } else { 0 }
+    if a <= b {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_gt(a: i32, b: i32) -> i32 {
-    if a > b { 1 } else { 0 }
+    if a > b {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_ge(a: i32, b: i32) -> i32 {
-    if a >= b { 1 } else { 0 }
+    if a >= b {
+        1
+    } else {
+        0
+    }
 }
 
 // Logical operation host functions (for i32 representing booleans)
 extern "C" fn test_and(a: i32, b: i32) -> i32 {
-    if a != 0 && b != 0 { 1 } else { 0 }
+    if a != 0 && b != 0 {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_or(a: i32, b: i32) -> i32 {
-    if a != 0 || b != 0 { 1 } else { 0 }
+    if a != 0 || b != 0 {
+        1
+    } else {
+        0
+    }
 }
 
 extern "C" fn test_not(a: i32) -> i32 {
-    if a == 0 { 1 } else { 0 }
+    if a == 0 {
+        1
+    } else {
+        0
+    }
 }
 
 // Identity function (useful for converting constants)
@@ -133,35 +173,36 @@ fn compile_and_run(source: &str) -> Result<String, String> {
 
     // 2. Parsing
     let parser = ProgramParser::new();
-    let token_iter = tokens.into_iter().enumerate().map(|(i, token)| {
-        Ok((i, token, i + 1))
-    });
-    let program_ast = parser.parse(token_iter)
+    let token_iter = tokens
+        .into_iter()
+        .enumerate()
+        .map(|(i, token)| Ok((i, token, i + 1)));
+    let program_ast = parser
+        .parse(token_iter)
         .map_err(|e| format!("Parsing failed: {:?}", e))?;
 
     // 3. IR Generation
-    let program_ir = lower_program(&program_ast)
-        .map_err(|errors| {
-            let mut error_msg = String::from("Semantic errors:\n");
-            for error in errors {
-                error_msg.push_str(&format!("  {}\n", error));
-            }
-            error_msg
-        })?;
+    let program_ir = lower_program(&program_ast).map_err(|errors| {
+        let mut error_msg = String::from("Semantic errors:\n");
+        for error in errors {
+            error_msg.push_str(&format!("  {}\n", error));
+        }
+        error_msg
+    })?;
 
     // 4. JIT Compilation
     let mut jit = create_test_jit()?;
-    jit.compile(&program_ir).map_err(|e| format!("JIT compilation failed: {}", e))?;
+    jit.compile(&program_ir)
+        .map_err(|e| format!("JIT compilation failed: {}", e))?;
 
     // 5. Execute and capture output
-    let main_ptr = jit.get_func_ptr("main")
+    let main_ptr = jit
+        .get_func_ptr("main")
         .ok_or("Main function not found in compiled code")?;
 
-    let output = capture_output(|| {
-        unsafe {
-            let main_fn = mem::transmute::<*const u8, fn()>(main_ptr);
-            main_fn();
-        }
+    let output = capture_output(|| unsafe {
+        let main_fn = mem::transmute::<*const u8, fn()>(main_ptr);
+        main_fn();
     });
 
     Ok(output)
@@ -178,14 +219,14 @@ fn create_test_jit() -> Result<JIT, String> {
     builder.symbol("print_int", test_print_int as *const u8);
     builder.symbol("getc", test_getc as *const u8);
     builder.symbol("get_number", test_get_number as *const u8);
-    
+
     // Register arithmetic operation functions
     builder.symbol("add", test_add as *const u8);
     builder.symbol("sub", test_sub as *const u8);
     builder.symbol("mul", test_mul as *const u8);
     builder.symbol("div", test_div as *const u8);
     builder.symbol("neg", test_neg as *const u8);
-    
+
     // Register comparison operation functions
     builder.symbol("eq", test_eq as *const u8);
     builder.symbol("ne", test_ne as *const u8);
@@ -193,12 +234,12 @@ fn create_test_jit() -> Result<JIT, String> {
     builder.symbol("le", test_le as *const u8);
     builder.symbol("gt", test_gt as *const u8);
     builder.symbol("ge", test_ge as *const u8);
-    
+
     // Register logical operation functions
     builder.symbol("and", test_and as *const u8);
     builder.symbol("or", test_or as *const u8);
     builder.symbol("not", test_not as *const u8);
-    
+
     // Register utility functions
     builder.symbol("identity", test_identity as *const u8);
 
@@ -208,6 +249,7 @@ fn create_test_jit() -> Result<JIT, String> {
         module,
         function_ids: HashMap::new(),
         show_cranelift_ir: false,
+        host_abi: Box::new(tilt_host_abi::JITMemoryHostABI::new()),
     })
 }
 
@@ -509,7 +551,7 @@ entry:
 "#;
 
         let output = compile_and_run(source).expect("Compilation failed");
-        assert_eq!(output, "8");  // fib(6) = 8
+        assert_eq!(output, "8"); // fib(6) = 8
     }
 
     #[test]
@@ -613,7 +655,7 @@ entry:
 "#;
 
         let output = compile_and_run(source).expect("Compilation failed");
-        assert_eq!(output, "120");  // 5! = 120
+        assert_eq!(output, "120"); // 5! = 120
     }
 
     #[test]
@@ -644,7 +686,7 @@ entry:
 "#;
 
         let output = compile_and_run(source).expect("Compilation failed");
-        assert_eq!(output, "0");  // Should print '0' since we pass 0
+        assert_eq!(output, "0"); // Should print '0' since we pass 0
     }
 
     #[test]
@@ -742,8 +784,8 @@ entry:
         match output {
             Ok(result) => {
                 println!("Mutual recursion output: {}", result);
-                assert_eq!(result, "1");  // 2 is even
-            },
+                assert_eq!(result, "1"); // 2 is even
+            }
             Err(error) => {
                 println!("Mutual recursion error: {}", error);
                 panic!("Should not fail");
@@ -800,7 +842,7 @@ entry:
 "#;
 
         let output = compile_and_run(source).expect("Compilation failed");
-        assert_eq!(output, "1");  // 4 is even, so should print '1'
+        assert_eq!(output, "1"); // 4 is even, so should print '1'
     }
 
     #[test]
@@ -844,26 +886,29 @@ entry:
         // TODO: Complete the IR builder integration once module exports are fixed
         println!("IR Builder API has been implemented and is ready for integration!");
         assert_eq!(2 + 2, 4);
-    }    
+    }
     #[test]
     fn test_host_abi_integration_with_jit() {
         // Test that we can create a JIT with the default ConsoleHostABI
         let jit_result = JIT::new();
-        assert!(jit_result.is_ok(), "Failed to create JIT with default ConsoleHostABI");
-        
+        assert!(
+            jit_result.is_ok(),
+            "Failed to create JIT with default ConsoleHostABI"
+        );
+
         println!("✓ JIT successfully created with ConsoleHostABI integration");
     }
 
     #[test]
     fn test_custom_host_abi_with_jit() {
-        use tilt_host_abi::{HostABI, RuntimeValue, HostResult};
         use std::sync::{Arc, Mutex};
-        
+        use tilt_host_abi::{HostABI, HostResult, RuntimeValue};
+
         // Create a custom Host ABI for testing (using Arc<Mutex<>> for thread safety)
         struct TestHostABI {
             call_count: Arc<Mutex<i32>>,
         }
-        
+
         impl TestHostABI {
             fn new() -> Self {
                 Self {
@@ -871,7 +916,7 @@ entry:
                 }
             }
         }
-        
+
         impl HostABI for TestHostABI {
             fn call_host_function(&mut self, name: &str, _args: &[RuntimeValue]) -> HostResult {
                 *self.call_count.lock().unwrap() += 1;
@@ -880,17 +925,20 @@ entry:
                     _ => Err(format!("Unknown function: {}", name)),
                 }
             }
-            
+
             fn available_functions(&self) -> Vec<&str> {
                 vec!["print_i32", "print_char", "print_hello"]
             }
         }
-        
+
         // Test that we can create a JIT with the custom Host ABI
         let test_abi = Box::new(TestHostABI::new());
         let jit_result = JIT::new_with_abi(test_abi);
-        assert!(jit_result.is_ok(), "Failed to create JIT with custom Host ABI");
-        
+        assert!(
+            jit_result.is_ok(),
+            "Failed to create JIT with custom Host ABI"
+        );
+
         println!("✓ JIT successfully created with custom Host ABI integration");
     }
 }

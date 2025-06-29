@@ -13,7 +13,7 @@ use tilt_ast::Type;
 pub enum RuntimeValue {
     I32(i32),
     I64(i64),
-    Ptr(u64), // Platform-native pointer as u64
+    Usize(usize), // Platform-native unsigned integer for sizes, indices, and pointers
     Void,
 }
 
@@ -23,7 +23,7 @@ impl RuntimeValue {
         match self {
             RuntimeValue::I32(_) => Type::I32,
             RuntimeValue::I64(_) => Type::I64,
-            RuntimeValue::Ptr(_) => Type::Ptr,
+            RuntimeValue::Usize(_) => Type::Usize,
             RuntimeValue::Void => Type::Void,
         }
     }
@@ -47,7 +47,7 @@ impl RuntimeValue {
     /// Extract a pointer value, panicking if the type doesn't match
     pub fn as_ptr(&self) -> u64 {
         match self {
-            RuntimeValue::Ptr(val) => *val,
+            RuntimeValue::Usize(val) => (*val).try_into().unwrap(),
             _ => panic!("Expected ptr, got {:?}", self),
         }
     }
@@ -71,7 +71,7 @@ impl RuntimeValue {
     /// Try to extract a pointer value, returning None if the type doesn't match
     pub fn try_as_ptr(&self) -> Option<u64> {
         match self {
-            RuntimeValue::Ptr(val) => Some(*val),
+            RuntimeValue::Usize(val) => Some((*val).try_into().unwrap()),
             _ => None,
         }
     }
@@ -280,10 +280,10 @@ impl MemoryHostABI {
                 let value = i64::from_le_bytes(bytes.try_into().unwrap());
                 Ok(RuntimeValue::I64(value))
             }
-            Type::Ptr => {
+            Type::Usize => {
                 let bytes = self.read_memory(addr, 8)?;
                 let value = u64::from_le_bytes(bytes.try_into().unwrap());
-                Ok(RuntimeValue::Ptr(value))
+                Ok(RuntimeValue::Usize(value.try_into().unwrap()))
             }
             Type::Void => Err("Cannot read void type from memory".to_string()),
         }
@@ -294,7 +294,7 @@ impl MemoryHostABI {
         match value {
             RuntimeValue::I32(v) => self.write_memory(addr, &v.to_le_bytes()),
             RuntimeValue::I64(v) => self.write_memory(addr, &v.to_le_bytes()),
-            RuntimeValue::Ptr(v) => self.write_memory(addr, &v.to_le_bytes()),
+            RuntimeValue::Usize(v) => self.write_memory(addr, &v.to_le_bytes()),
             RuntimeValue::Void => Err("Cannot write void type to memory".to_string()),
         }
     }
@@ -330,9 +330,9 @@ impl HostABI for MemoryHostABI {
                 if args.len() != 1 {
                     return Err(format!("alloc expects 1 argument, got {}", args.len()));
                 }
-                let size = args[0].as_i64() as u64;
+                let size = args[0].as_ptr();
                 let addr = self.allocate(size);
-                Ok(RuntimeValue::Ptr(addr))
+                Ok(RuntimeValue::Usize(addr.try_into().unwrap()))
             }
 
             "free" => {
@@ -482,9 +482,9 @@ impl HostABI for JITMemoryHostABI {
                 if args.len() != 1 {
                     return Err(format!("alloc expects 1 argument, got {}", args.len()));
                 }
-                let size = args[0].as_i64() as u64;
+                let size = args[0].as_ptr();
                 let addr = self.allocate_real_memory(size);
-                Ok(RuntimeValue::Ptr(addr))
+                Ok(RuntimeValue::Usize(addr.try_into().unwrap()))
             }
 
             "free" => {

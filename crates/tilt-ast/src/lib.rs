@@ -40,6 +40,7 @@ pub struct FunctionDef<'a> {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Block<'a> {
     pub label: Identifier<'a>,
+    pub params: Vec<TypedIdentifier<'a>>, // Block parameters for SSA loops
     pub instructions: Vec<Instruction<'a>>,
     pub terminator: Terminator<'a>,
 }
@@ -81,15 +82,18 @@ pub enum Expression<'a> {
 pub enum Terminator<'a> {
     // `ret` or `ret some_val`
     Ret(Option<Value<'a>>),
-    // `br my_label`
+    // `br my_label` or `br my_label(arg1, arg2, ...)`
     Br {
         label: Identifier<'a>,
+        args: Vec<Value<'a>>,
     },
-    // `br_if cond, true_label, false_label`
+    // `br_if cond, true_label, false_label` or `br_if cond, true_label(args), false_label(args)`
     BrIf {
         cond: Value<'a>,
         true_label: Identifier<'a>,
+        true_args: Vec<Value<'a>>,
         false_label: Identifier<'a>,
+        false_args: Vec<Value<'a>>,
     },
 }
 
@@ -105,7 +109,7 @@ pub enum Type {
     I64,
     F32,
     F64,
-    Ptr, // Platform-native pointer type
+    Usize, // Platform-native unsigned integer type for sizes, indices, and pointers
     Void,
 }
 

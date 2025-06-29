@@ -1,0 +1,274 @@
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
+
+# Emulate a binary tree node structure:
+# Node { value: i32, left: usize, right: usize }
+# Layout: [value(4 bytes)][left(pointer bytes)][right(pointer bytes)] = total bytes
+
+fn node_size() -> usize {
+entry:
+    value_size:usize = sizeof.i32()
+    ptr_size:usize = sizeof.usize()
+    left_size:usize = ptr_size
+    right_size:usize = ptr_size
+    total1:usize = usize.add(value_size, left_size)
+    total:usize = usize.add(total1, right_size)
+    ret (total)
+}
+
+fn node_create(value:i32) -> usize {
+entry:
+    size:usize = node_size()
+    node_ptr:usize = alloc(size)
+    
+    # Set value at offset 0
+    zero_offset:usize = usize.const(0)
+    value_ptr:usize = usize.add(node_ptr, zero_offset)
+    i32.store(value_ptr, value)
+    
+    # Set left pointer to null (0) at offset 4
+    left_offset:usize = sizeof.i32()
+    left_ptr:usize = usize.add(node_ptr, left_offset)
+    null_ptr:usize = usize.const(0)
+    usize.store(left_ptr, null_ptr)
+    
+    # Set right pointer to null (0) at offset (4 + pointer_size)
+    right_offset_base:usize = sizeof.i32()
+    ptr_size:usize = sizeof.usize()
+    right_offset:usize = usize.add(right_offset_base, ptr_size)
+    right_ptr:usize = usize.add(node_ptr, right_offset)
+    usize.store(right_ptr, null_ptr)
+    
+    ret (node_ptr)
+}
+
+fn node_get_value(node:usize) -> i32 {
+entry:
+    zero_offset:usize = usize.const(0)
+    value_ptr:usize = usize.add(node, zero_offset)
+    value:i32 = i32.load(value_ptr)
+    ret (value)
+}
+
+fn node_get_left(node:ptr) -> ptr {
+entry:
+    left_offset:i64 = sizeof.i32()
+    left_ptr:ptr = ptr.add(node, left_offset)
+    left_node_addr:i64 = i64.load(left_ptr)
+    # Convert i64 back to ptr (this is a hack but works in our system)
+    temp_ptr:ptr = alloc(i64.const(8))
+    i64.store(temp_ptr, left_node_addr)
+    result:ptr = ptr.load(temp_ptr)
+    free(temp_ptr)
+    ret (result)
+}
+
+fn node_get_right(node:ptr) -> ptr {
+entry:
+    right_offset_base:i64 = sizeof.i32()
+    ptr_size:i64 = sizeof.i64()
+    right_offset:i64 = i64.add(right_offset_base, ptr_size)
+    right_ptr:ptr = ptr.add(node, right_offset)
+    right_node_addr:i64 = i64.load(right_ptr)
+    # Convert i64 back to ptr
+    temp_ptr:ptr = alloc(i64.const(8))
+    i64.store(temp_ptr, right_node_addr)
+    result:ptr = ptr.load(temp_ptr)
+    free(temp_ptr)
+    ret (result)
+}
+
+fn node_set_left(node:ptr, left_child:ptr) -> void {
+entry:
+    left_offset:i64 = sizeof.i32()
+    left_ptr:ptr = ptr.add(node, left_offset)
+    # Convert ptr to i64 (hack)
+    temp_ptr:ptr = alloc(i64.const(8))
+    ptr.store(temp_ptr, left_child)
+    left_addr:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    i64.store(left_ptr, left_addr)
+    ret
+}
+
+fn node_set_right(node:ptr, right_child:ptr) -> void {
+entry:
+    right_offset_base:i64 = sizeof.i32()
+    ptr_size:i64 = sizeof.i64()
+    right_offset:i64 = i64.add(right_offset_base, ptr_size)
+    right_ptr:ptr = ptr.add(node, right_offset)
+    # Convert ptr to i64
+    temp_ptr:ptr = alloc(i64.const(8))
+    ptr.store(temp_ptr, right_child)
+    right_addr:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    i64.store(right_ptr, right_addr)
+    ret
+}
+
+fn is_null_ptr(ptr_to_check:ptr) -> i32 {
+entry:
+    # Check if pointer is null by converting to i64 and comparing to 0
+    temp_ptr:ptr = alloc(i64.const(8))
+    ptr.store(temp_ptr, ptr_to_check)
+    addr:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    
+    zero:i64 = i64.const(0)
+    is_zero:i32 = i64.eq(addr, zero)
+    ret (is_zero)
+}
+
+# Recursive binary search tree insertion
+fn bst_insert(root:ptr, value:i32) -> ptr {
+entry:
+    # If root is null, create new node
+    is_null:i32 = is_null_ptr(root)
+    br_if is_null, create_new_node, insert_into_existing
+
+create_new_node:
+    new_node:ptr = node_create(value)
+    ret (new_node)
+
+insert_into_existing:
+    root_value:i32 = node_get_value(root)
+    should_go_left:i32 = i32.lt(value, root_value)
+    br_if should_go_left, insert_left, insert_right
+
+insert_left:
+    left_child:ptr = node_get_left(root)
+    new_left:ptr = bst_insert(left_child, value)
+    node_set_left(root, new_left)
+    ret (root)
+
+insert_right:
+    right_child:ptr = node_get_right(root)
+    new_right:ptr = bst_insert(right_child, value)
+    node_set_right(root, new_right)
+    ret (root)
+}
+
+# Recursive in-order traversal with accumulator
+fn inorder_sum(node:ptr, accumulator:i32) -> i32 {
+entry:
+    is_null:i32 = is_null_ptr(node)
+    br_if is_null, return_accumulator, traverse_node
+
+return_accumulator:
+    ret (accumulator)
+
+traverse_node:
+    # Traverse left subtree
+    left_child:ptr = node_get_left(node)
+    left_sum:i32 = inorder_sum(left_child, accumulator)
+    
+    # Add current node value
+    current_value:i32 = node_get_value(node)
+    current_sum:i32 = i32.add(left_sum, current_value)
+    
+    # Traverse right subtree
+    right_child:ptr = node_get_right(node)
+    final_sum:i32 = inorder_sum(right_child, current_sum)
+    
+    ret (final_sum)
+}
+
+# Recursive tree height calculation
+fn tree_height(node:ptr) -> i32 {
+entry:
+    is_null:i32 = is_null_ptr(node)
+    br_if is_null, null_height, calculate_height
+
+null_height:
+    zero:i32 = i32.const(0)
+    ret (zero)
+
+calculate_height:
+    left_child:ptr = node_get_left(node)
+    right_child:ptr = node_get_right(node)
+    
+    left_height:i32 = tree_height(left_child)
+    right_height:i32 = tree_height(right_child)
+    
+    # Find max height
+    left_is_taller:i32 = i32.lt(right_height, left_height)
+    br_if left_is_taller, left_taller, right_taller
+
+left_taller:
+    one:i32 = i32.const(1)
+    total_height:i32 = i32.add(left_height, one)
+    ret (total_height)
+
+right_taller:
+    one:i32 = i32.const(1)
+    total_height:i32 = i32.add(right_height, one)
+    ret (total_height)
+}
+
+# Recursive tree destruction
+fn destroy_tree(node:ptr) -> void {
+entry:
+    is_null:i32 = is_null_ptr(node)
+    br_if is_null, null_cleanup, destroy_children
+
+null_cleanup:
+    ret
+
+destroy_children:
+    left_child:ptr = node_get_left(node)
+    right_child:ptr = node_get_right(node)
+    
+    destroy_tree(left_child)
+    destroy_tree(right_child)
+    
+    free(node)
+    ret
+}
+
+# Complex nested operations combining all features
+fn complex_tree_operations() -> i32 {
+entry:
+    # Build a binary search tree with values: 5, 3, 7, 1, 4, 6, 8
+    null_root:ptr = alloc(i64.const(1))  # Temporary non-null
+    free(null_root)
+    null_root = alloc(i64.const(0))      # This creates a "null" pointer
+    free(null_root)
+    
+    # Start with null root and insert values
+    root:ptr = bst_insert(null_root, i32.const(5))
+    root = bst_insert(root, i32.const(3))
+    root = bst_insert(root, i32.const(7))
+    root = bst_insert(root, i32.const(1))
+    root = bst_insert(root, i32.const(4))
+    root = bst_insert(root, i32.const(6))
+    root = bst_insert(root, i32.const(8))
+    
+    # Calculate tree metrics using nested recursive calls
+    zero_acc:i32 = i32.const(0)
+    tree_sum:i32 = inorder_sum(root, zero_acc)
+    tree_height_val:i32 = tree_height(root)
+    
+    # Complex calculation: sum * height + height^2
+    sum_height_product:i32 = i32.mul(tree_sum, tree_height_val)
+    height_squared:i32 = i32.mul(tree_height_val, tree_height_val)
+    final_result:i32 = i32.add(sum_height_product, height_squared)
+    
+    # Clean up the tree
+    destroy_tree(root)
+    
+    ret (final_result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = complex_tree_operations()
+    
+    # Additional calculation to make it more fragile
+    # Multiply by prime number and add offset
+    prime:i32 = i32.const(17)
+    multiplied:i32 = i32.mul(result, prime)
+    offset:i32 = i32.const(42)
+    final_answer:i32 = i32.add(multiplied, offset)
+    
+    ret (final_answer)
+}

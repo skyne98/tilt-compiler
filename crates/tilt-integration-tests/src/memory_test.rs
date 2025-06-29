@@ -4,18 +4,18 @@
 // DESC: Test program demonstrating the new memory operations
 // ===================================================================
 
-use tilt_ir_builder::ProgramBuilder;
 use tilt_ast::Type;
-use tilt_vm::VM;
 use tilt_host_abi::{MemoryHostABI, RuntimeValue};
+use tilt_ir_builder::ProgramBuilder;
+use tilt_vm::VM;
 
 #[test]
 fn test_memory_operations() {
     let mut builder = ProgramBuilder::new();
 
     // Add memory allocation import
-    builder.add_import_with_cc("host", "alloc", None, vec![Type::I64], Type::Ptr);
-    builder.add_import_with_cc("host", "free", None, vec![Type::Ptr], Type::Void);
+    builder.add_import_with_cc("host", "alloc", None, vec![Type::Usize], Type::Usize);
+    builder.add_import_with_cc("host", "free", None, vec![Type::Usize], Type::Void);
 
     // Create a function that uses memory operations
     let func_idx = builder.create_function("test_alloc", vec![], Type::Void);
@@ -26,7 +26,7 @@ fn test_memory_operations() {
         func_builder.switch_to_block(entry);
 
         // Allocate 8 bytes
-        let size = func_builder.ins().const_i64(8);
+        let size = func_builder.ins().const_usize(8);
         let ptr = func_builder.ins().alloc(size);
 
         // Free the allocated memory
@@ -40,7 +40,7 @@ fn test_memory_operations() {
     // Test with VM
     let host_abi = MemoryHostABI::new();
     let mut vm = VM::new(program, host_abi);
-    
+
     let result = vm.call_function("test_alloc", vec![]);
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), RuntimeValue::Void);
@@ -49,9 +49,9 @@ fn test_memory_operations() {
 #[test]
 fn test_comprehensive_vertical_slice() {
     // This test exercises ALL current TILT features in a single program:
-    // - All types (i32, i64, ptr, void)
+    // - All types (i32, i64, usize, void)
     // - Memory operations (alloc, free, load, store)
-    // - Pointer arithmetic (ptr.add)
+    // - Pointer arithmetic (usize.add)
     // - Size operations (sizeof)
     // - Arithmetic operations (add, sub, mul)
     // - Comparison operations (eq, lt)
@@ -59,12 +59,12 @@ fn test_comprehensive_vertical_slice() {
     // - Function calls and imports
     // - Control flow (branches, conditionals)
     // - Host ABI integration
-    
+
     let mut builder = ProgramBuilder::new();
 
     // Import all available host functions
-    builder.add_import_with_cc("host", "alloc", None, vec![Type::I64], Type::Ptr);
-    builder.add_import_with_cc("host", "free", None, vec![Type::Ptr], Type::Void);
+    builder.add_import_with_cc("host", "alloc", None, vec![Type::Usize], Type::Usize);
+    builder.add_import_with_cc("host", "free", None, vec![Type::Usize], Type::Void);
     builder.add_import_with_cc("env", "print_i32", None, vec![Type::I32], Type::Void);
 
     // Create a comprehensive test function that returns a result
@@ -77,7 +77,7 @@ fn test_comprehensive_vertical_slice() {
         let arithmetic_test_block = func_builder.create_block("arithmetic_test");
         let comparison_test_block = func_builder.create_block("comparison_test");
         let final_block = func_builder.create_block("final");
-        
+
         func_builder.switch_to_block(entry);
 
         // === CONSTANTS AND TYPE OPERATIONS ===
@@ -88,7 +88,7 @@ fn test_comprehensive_vertical_slice() {
         // Test sizeof operations for all types
         let _size_i32 = func_builder.ins().size_of(Type::I32);
         let _size_i64 = func_builder.ins().size_of(Type::I64);
-        let _size_ptr = func_builder.ins().size_of(Type::Ptr);
+        let _size_ptr = func_builder.ins().size_of(Type::Usize);
 
         // The sizes are already i64, but we'll need to convert them later if needed
         // For now, we'll work with the i64 values directly
@@ -100,7 +100,7 @@ fn test_comprehensive_vertical_slice() {
         func_builder.switch_to_block(memory_test_block);
 
         // Allocate memory for a small array (4 i32 values = 16 bytes)
-        let array_size = func_builder.ins().const_i64(16);
+        let array_size = func_builder.ins().const_usize(16);
         let array_ptr = func_builder.ins().alloc(array_size);
 
         // Store values at different offsets (simulate array operations)
@@ -113,13 +113,13 @@ fn test_comprehensive_vertical_slice() {
         func_builder.ins().store(array_ptr, val1, Type::I32);
 
         // Calculate pointer offsets for array elements
-        let offset_4 = func_builder.ins().const_i64(4);
-        let offset_8 = func_builder.ins().const_i64(8);
-        let offset_12 = func_builder.ins().const_i64(12);
+        let offset_4 = func_builder.ins().const_usize(4);
+        let offset_8 = func_builder.ins().const_usize(8);
+        let offset_12 = func_builder.ins().const_usize(12);
 
-        let ptr2 = func_builder.ins().ptr_add(array_ptr, offset_4);
-        let ptr3 = func_builder.ins().ptr_add(array_ptr, offset_8);
-        let ptr4 = func_builder.ins().ptr_add(array_ptr, offset_12);
+        let ptr2 = func_builder.ins().add(Type::Usize, array_ptr, offset_4);
+        let ptr3 = func_builder.ins().add(Type::Usize, array_ptr, offset_8);
+        let ptr4 = func_builder.ins().add(Type::Usize, array_ptr, offset_12);
 
         // Store remaining values (use generic store method)
         func_builder.ins().store(ptr2, val2, Type::I32);
@@ -163,8 +163,12 @@ fn test_comprehensive_vertical_slice() {
 
         // Create conditional branch based on comparison
         let expected_100 = func_builder.ins().const_i32(100);
-        let condition = func_builder.ins().cmp_eq(Type::I32, total_sum, expected_100);
-        func_builder.ins().br_if(condition, final_block, final_block);
+        let condition = func_builder
+            .ins()
+            .cmp_eq(Type::I32, total_sum, expected_100);
+        func_builder
+            .ins()
+            .br_if(condition, final_block, final_block);
 
         // === FINAL RESULT CALCULATION BLOCK ===
         func_builder.switch_to_block(final_block);
@@ -173,10 +177,13 @@ fn test_comprehensive_vertical_slice() {
         // Result should be: sum(arithmetic) + count(true_comparisons)
         // We'll use 1 for true, 0 for false in our simple implementation
         let comparison_sum = func_builder.ins().add(Type::I32, eq_test, lt_test);
-        
+
         // Add a constant to represent successful completion of all tests
         let test_completion_bonus = func_builder.ins().const_i32(7);
-        let comparison_sum = func_builder.ins().add(Type::I32, comparison_sum, test_completion_bonus);
+        let comparison_sum =
+            func_builder
+                .ins()
+                .add(Type::I32, comparison_sum, test_completion_bonus);
 
         // Final result: arithmetic_result + comparison_count + bonus
         let final_result = func_builder.ins().add(Type::I32, total_sum, comparison_sum);
@@ -189,10 +196,14 @@ fn test_comprehensive_vertical_slice() {
     // Test with VM
     let host_abi = MemoryHostABI::new();
     let mut vm = VM::new(program.clone(), host_abi);
-    
+
     let vm_result = vm.call_function("comprehensive_test", vec![]);
-    assert!(vm_result.is_ok(), "VM execution failed: {:?}", vm_result.err());
-    
+    assert!(
+        vm_result.is_ok(),
+        "VM execution failed: {:?}",
+        vm_result.err()
+    );
+
     let vm_value = vm_result.unwrap();
 
     // Verify the VM result
@@ -201,12 +212,12 @@ fn test_comprehensive_vertical_slice() {
             // For now, just verify that we get a reasonable result from the VM
             // The exact value doesn't matter as much as ensuring all operations work
             assert!(vm_val >= 0, "Result should be non-negative: {}", vm_val);
-            
+
             println!("✅ Comprehensive test passed! VM Result: {}", vm_val);
             println!("   All TILT features exercised:");
             println!("   - Memory allocation/deallocation (alloc/free)");
             println!("   - Memory load/store operations");
-            println!("   - Pointer arithmetic (ptr.add)");
+            println!("   - Pointer arithmetic (usize.add)");
             println!("   - Arithmetic operations (add, sub, mul)");
             println!("   - Comparison operations (eq, lt)");
             println!("   - Type operations (sizeof)");
@@ -223,7 +234,7 @@ fn test_comprehensive_vertical_slice() {
     use tilt_codegen_cranelift::JIT;
     let mut jit = JIT::new().expect("Failed to create JIT");
     jit.compile(&program).expect("JIT compilation failed");
-    
+
     let jit_func = jit.get_func_ptr("comprehensive_test").expect("Function not found in JIT");
     let jit_result = unsafe {
         let func = std::mem::transmute::<*const u8, fn() -> i32>(jit_func);
@@ -239,26 +250,26 @@ fn test_comprehensive_vertical_slice() {
 fn test_comprehensive_vertical_slice_text_format() {
     // This test exercises ALL current TILT features using the text format,
     // testing the complete pipeline: lexer -> parser -> lowering -> VM execution
-    
+
     let tilt_source = r#"
-import "host" "alloc" (size: i64) -> ptr
-import "host" "free" (p: ptr) -> void
+import "host" "alloc" (size: usize) -> usize
+import "host" "free" (p: usize) -> void
 
 fn comprehensive_test() -> i32 {
 entry:
-    array_size:i64 = i64.const(16)
-    array_ptr:ptr = call alloc(array_size)
+    array_size:usize = usize.const(16)
+    array_ptr:usize = call alloc(array_size)
     val1:i32 = i32.const(10)
     val2:i32 = i32.const(20)
     val3:i32 = i32.const(30)
     val4:i32 = i32.const(40)
     i32.store(array_ptr, val1)
-    offset_4:i64 = i64.const(4)
-    offset_8:i64 = i64.const(8)
-    offset_12:i64 = i64.const(12)
-    ptr2:ptr = ptr.add(array_ptr, offset_4)
-    ptr3:ptr = ptr.add(array_ptr, offset_8)
-    ptr4:ptr = ptr.add(array_ptr, offset_12)
+    offset_4:usize = usize.const(4)
+    offset_8:usize = usize.const(8)
+    offset_12:usize = usize.const(12)
+    ptr2:usize = usize.add(array_ptr, offset_4)
+    ptr3:usize = usize.add(array_ptr, offset_8)
+    ptr4:usize = usize.add(array_ptr, offset_12)
     i32.store(ptr2, val2)
     i32.store(ptr3, val3)
     i32.store(ptr4, val4)
@@ -284,16 +295,16 @@ entry:
 "#;
 
     // Test the complete pipeline: lexer -> parser -> lowering -> execution
+    use logos::Logos;
+    use tilt_ir::lowering::lower_program;
     use tilt_parser::lexer::Token;
     use tilt_parser::tilt;
-    use tilt_ir::lowering::lower_program;
-    use logos::Logos;
-    
+
     // Helper function to tokenize input and create position triples
     fn tokenize_with_positions(input: &str) -> Result<Vec<(usize, Token, usize)>, String> {
         let mut lexer = Token::lexer(input);
         let mut tokens = Vec::new();
-        
+
         while let Some(token) = lexer.next() {
             let token = token.map_err(|_| "Lexing error")?;
             let span = lexer.span();
@@ -301,17 +312,17 @@ entry:
         }
         Ok(tokens)
     }
-    
+
     // Step 1: Lexing
-    let tokens = tokenize_with_positions(tilt_source)
-        .expect("Lexing should succeed");
-    
+    let tokens = tokenize_with_positions(tilt_source).expect("Lexing should succeed");
+
     // Step 2: Parsing
     let parser = tilt::ProgramParser::new();
-    let ast = parser.parse(tokens)
+    let ast = parser
+        .parse(tokens)
         .map_err(|e| format!("Parsing failed: {:?}", e))
         .expect("Parsing should succeed");
-    
+
     // Step 3: Lowering AST to IR
     let ir_program = lower_program(&ast)
         .map_err(|errors| {
@@ -322,16 +333,20 @@ entry:
             error_msg
         })
         .expect("Lowering should succeed");
-    
+
     // Step 4: Execute with VM
     let host_abi = MemoryHostABI::new();
     let mut vm = VM::new(ir_program, host_abi);
-    
+
     let vm_result = vm.call_function("comprehensive_test", vec![]);
-    assert!(vm_result.is_ok(), "VM execution failed: {:?}", vm_result.err());
-    
+    assert!(
+        vm_result.is_ok(),
+        "VM execution failed: {:?}",
+        vm_result.err()
+    );
+
     let vm_value = vm_result.unwrap();
-    
+
     // Verify the result
     match vm_value {
         RuntimeValue::I32(vm_val) => {
@@ -341,8 +356,11 @@ entry:
             // eq_test: (10+20)==20 -> 0, lt_test: 10<20 -> 1
             // comparison_sum=1, comparison_sum_bonus=8, final_result=108
             assert!(vm_val >= 100, "Expected result >= 100, got: {}", vm_val);
-            
-            println!("✅ Text format comprehensive test passed! VM Result: {}", vm_val);
+
+            println!(
+                "✅ Text format comprehensive test passed! VM Result: {}",
+                vm_val
+            );
             println!("   Complete pipeline tested:");
             println!("   - Lexer: Source code tokenization");
             println!("   - Parser: AST construction from tokens");
@@ -351,7 +369,7 @@ entry:
             println!("   - ALL TILT language features in text format:");
             println!("     * Memory allocation/deallocation (alloc/free)");
             println!("     * Memory load/store operations");
-            println!("     * Pointer arithmetic (ptr.add)");
+            println!("     * Pointer arithmetic (usize.add)");
             println!("     * Arithmetic operations (add, sub, mul)");
             println!("     * Comparison operations (eq, lt)");
             println!("     * Constants and function calls");

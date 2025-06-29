@@ -223,6 +223,17 @@ fn lower_block(
 
     let mut ir_block = BasicBlock::new(block_id, block.label.to_string());
 
+    // Add block parameters
+    for param in &block.params {
+        let param_type = param.ty;
+        let value_id = func.next_value();
+        ir_block.params.push((value_id, param_type));
+
+        // Map the parameter name to the value ID with its type
+        ctx.value_map
+            .insert(param.name.to_string(), (value_id, param_type));
+    }
+
     // Lower instructions
     for instruction in &block.instructions {
         match lower_instruction(ctx, func, instruction) {
@@ -338,7 +349,7 @@ fn lower_instruction(
                 tilt_ast::Expression::Operation { op, args } => {
                     // First check if this is a function call (no dot in operation name)
                     if !op.contains('.')
-                        && *op != "ptr.add"
+                        && *op != "usize.add"
                         && *op != "alloc"
                         && *op != "free"
                         && !op.starts_with("sizeof.")
@@ -400,47 +411,47 @@ fn lower_instruction(
                     }
 
                     // Handle new memory operations
-                    if *op == "ptr.add" {
-                        // ptr.add ptr_val, offset_val
+                    if *op == "usize.add" {
+                        // usize.add ptr_val, offset_val
                         if args.len() != 2 {
                             ctx.error(SemanticError::InvalidOperation {
                                 operation: format!(
-                                    "ptr.add with {} arguments (expected 2)",
+                                    "usize.add with {} arguments (expected 2)",
                                     args.len()
                                 ),
                                 ty: dest.ty,
-                                location: "ptr.add operation".to_string(),
+                                location: "usize.add operation".to_string(),
                             });
                             return Err(());
                         }
 
-                        if dest.ty != Type::Ptr {
+                        if dest.ty != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::Ptr,
+                                expected: Type::Usize,
                                 found: dest.ty,
-                                location: "ptr.add result".to_string(),
+                                location: "usize.add result".to_string(),
                             });
                             return Err(());
                         }
 
                         let (ptr_id, ptr_type) =
-                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                            lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
                         let (offset_id, offset_type) =
-                            lower_value_with_func(ctx, func, &args[1], Type::I64)?;
+                            lower_value_with_func(ctx, func, &args[1], Type::Usize)?;
 
-                        if ptr_type != Type::Ptr {
+                        if ptr_type != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::Ptr,
+                                expected: Type::Usize,
                                 found: ptr_type,
-                                location: "ptr.add pointer operand".to_string(),
+                                location: "usize.add first operand".to_string(),
                             });
                             return Err(());
                         }
-                        if offset_type != Type::I64 {
+                        if offset_type != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::I64,
+                                expected: Type::Usize,
                                 found: offset_type,
-                                location: "ptr.add offset operand".to_string(),
+                                location: "usize.add second operand".to_string(),
                             });
                             return Err(());
                         }
@@ -464,9 +475,9 @@ fn lower_instruction(
                             return Err(());
                         }
 
-                        if dest.ty != Type::I64 {
+                        if dest.ty != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::I64,
+                                expected: Type::Usize,
                                 found: dest.ty,
                                 location: "sizeof result".to_string(),
                             });
@@ -479,7 +490,7 @@ fn lower_instruction(
                             "i64" => Type::I64,
                             "f32" => Type::F32,
                             "f64" => Type::F64,
-                            "ptr" => Type::Ptr,
+                            "ptr" => Type::Usize,
                             "void" => Type::Void,
                             _ => {
                                 ctx.error(SemanticError::InvalidOperation {
@@ -509,9 +520,9 @@ fn lower_instruction(
                             return Err(());
                         }
 
-                        if dest.ty != Type::Ptr {
+                        if dest.ty != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::Ptr,
+                                expected: Type::Usize,
                                 found: dest.ty,
                                 location: "alloc result".to_string(),
                             });
@@ -519,11 +530,11 @@ fn lower_instruction(
                         }
 
                         let (size_id, size_type) =
-                            lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+                            lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
 
-                        if size_type != Type::I64 {
+                        if size_type != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::I64,
+                                expected: Type::Usize,
                                 found: size_type,
                                 location: "alloc size operand".to_string(),
                             });
@@ -541,12 +552,27 @@ fn lower_instruction(
                         let type_part = &op[..dot_pos];
                         let op_part = &op[dot_pos + 1..];
 
+                        // Handle conversion operations first (these don't follow normal type rules)
+                        if op_part.starts_with("to_") {
+                            return handle_conversion_operation(
+                                ctx,
+                                func,
+                                dest,
+                                dest_value_id,
+                                op,
+                                type_part,
+                                op_part,
+                                &args,
+                            );
+                        }
+
                         let ty = match type_part {
                             "i32" => Type::I32,
                             "i64" => Type::I64,
                             "f32" => Type::F32,
                             "f64" => Type::F64,
-                            "ptr" => Type::Ptr,
+                            "ptr" => Type::Usize,
+                            "usize" => Type::Usize,
                             _ => {
                                 ctx.error(SemanticError::InvalidOperation {
                                     operation: op.to_string(),
@@ -582,11 +608,11 @@ fn lower_instruction(
                             }
 
                             let (addr_id, addr_type) =
-                                lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                                lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
 
-                            if addr_type != Type::Ptr {
+                            if addr_type != Type::Usize {
                                 ctx.error(SemanticError::TypeMismatch {
-                                    expected: Type::Ptr,
+                                    expected: Type::Usize,
                                     found: addr_type,
                                     location: "load address operand".to_string(),
                                 });
@@ -605,7 +631,10 @@ fn lower_instruction(
                             ctx.error(SemanticError::TypeMismatch {
                                 expected: dest.ty,
                                 found: ty,
-                                location: "operation result".to_string(),
+                                location: format!(
+                                    "operation '{}': destination expects {:?} but operation '{}' produces {:?}",
+                                    op, dest.ty, op, ty
+                                ),
                             });
                             return Err(());
                         }
@@ -625,7 +654,10 @@ fn lower_instruction(
                                 ctx.error(SemanticError::TypeMismatch {
                                     expected: ty,
                                     found: lhs_type,
-                                    location: "binary operation left operand".to_string(),
+                                    location: format!(
+                                        "operation '{}': left operand expected {:?} but got {:?}",
+                                        op, ty, lhs_type
+                                    ),
                                 });
                                 return Err(());
                             }
@@ -633,7 +665,10 @@ fn lower_instruction(
                                 ctx.error(SemanticError::TypeMismatch {
                                     expected: ty,
                                     found: rhs_type,
-                                    location: "binary operation right operand".to_string(),
+                                    location: format!(
+                                        "operation '{}': right operand expected {:?} but got {:?}",
+                                        op, ty, rhs_type
+                                    ),
                                 });
                                 return Err(());
                             }
@@ -666,6 +701,240 @@ fn lower_instruction(
                                     });
                                     Err(())
                                 }
+                            } else if op_part == "extend" && type_part == "i32" {
+                                // Handle i32.extend to convert i32 to i64 or usize
+                                if dest.ty != Type::I64 && dest.ty != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: dest.ty,
+                                        location: "i32.extend result must be i64 or usize"
+                                            .to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I32)?;
+
+                                if operand_type != Type::I32 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I32,
+                                        found: operand_type,
+                                        location: "i32.extend operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I32,
+                                    to_ty: dest.ty,
+                                })
+                            } else if op_part == "extend" && type_part == "usize" {
+                                // Handle usize.extend to convert usize to i64
+                                if dest.ty != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: dest.ty,
+                                        location: "usize.extend result must be i64".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
+
+                                if operand_type != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::Usize,
+                                        found: operand_type,
+                                        location: "usize.extend operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::Usize,
+                                    to_ty: Type::I64,
+                                })
+                            } else if op_part == "trunc" && type_part == "i64" {
+                                // Handle i64.trunc to convert i64 to i32 or usize
+                                if dest.ty != Type::I32 && dest.ty != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I32,
+                                        found: dest.ty,
+                                        location: "i64.trunc result must be i32 or usize"
+                                            .to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+
+                                if operand_type != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: operand_type,
+                                        location: "i64.trunc operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I64,
+                                    to_ty: dest.ty,
+                                })
+                            } else if op_part == "to_i64" && type_part == "i32" {
+                                // Handle i32.to_i64 conversion
+                                if dest.ty != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: dest.ty,
+                                        location: "i32.to_i64 result must be i64".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I32)?;
+
+                                if operand_type != Type::I32 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I32,
+                                        found: operand_type,
+                                        location: "i32.to_i64 operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I32,
+                                    to_ty: Type::I64,
+                                })
+                            } else if op_part == "to_usize" && type_part == "i32" {
+                                // Handle i32.to_usize conversion
+                                if dest.ty != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::Usize,
+                                        found: dest.ty,
+                                        location: "i32.to_usize result must be usize".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I32)?;
+
+                                if operand_type != Type::I32 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I32,
+                                        found: operand_type,
+                                        location: "i32.to_usize operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I32,
+                                    to_ty: Type::Usize,
+                                })
+                            } else if op_part == "to_i32" && type_part == "i64" {
+                                // Handle i64.to_i32 conversion
+                                if dest.ty != Type::I32 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I32,
+                                        found: dest.ty,
+                                        location: "i64.to_i32 result must be i32".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+
+                                if operand_type != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: operand_type,
+                                        location: "i64.to_i32 operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I64,
+                                    to_ty: Type::I32,
+                                })
+                            } else if op_part == "to_usize" && type_part == "i64" {
+                                // Handle i64.to_usize conversion
+                                if dest.ty != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::Usize,
+                                        found: dest.ty,
+                                        location: "i64.to_usize result must be usize".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::I64)?;
+
+                                if operand_type != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: operand_type,
+                                        location: "i64.to_usize operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::I64,
+                                    to_ty: Type::Usize,
+                                })
+                            } else if op_part == "to_i64" && type_part == "usize" {
+                                // Handle usize.to_i64 conversion
+                                if dest.ty != Type::I64 {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::I64,
+                                        found: dest.ty,
+                                        location: "usize.to_i64 result must be i64".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                let (operand_id, operand_type) =
+                                    lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
+
+                                if operand_type != Type::Usize {
+                                    ctx.error(SemanticError::TypeMismatch {
+                                        expected: Type::Usize,
+                                        found: operand_type,
+                                        location: "usize.to_i64 operand".to_string(),
+                                    });
+                                    return Err(());
+                                }
+
+                                Ok(Instruction::Convert {
+                                    dest: dest_value_id,
+                                    src: operand_id,
+                                    from_ty: Type::Usize,
+                                    to_ty: Type::I64,
+                                })
                             } else {
                                 // Unary operation
                                 let unary_op = UnaryOperator::from_str(op_part, ty)
@@ -808,6 +1077,74 @@ fn lower_instruction(
                 }
                 tilt_ast::Expression::Operation { op, args } => {
                     // Handle operations that return void (e.g., store, free)
+                    // Also handle function calls that look like operations
+
+                    // First check if this is a function call disguised as an operation
+                    if let Some((param_types, return_type)) = ctx.lookup_function(op).cloned() {
+                        // This is a function call - handle it like the Call branch above
+                        if return_type != Type::Void {
+                            ctx.error(SemanticError::TypeMismatch {
+                                expected: Type::Void,
+                                found: return_type,
+                                location: format!("void call to function '{}'", op),
+                            });
+                            return Err(());
+                        }
+
+                        // Check argument count
+                        if args.len() != param_types.len() {
+                            ctx.error(SemanticError::ArgumentMismatch {
+                                function: op.to_string(),
+                                expected: param_types.len(),
+                                found: args.len(),
+                                location: "void function call".to_string(),
+                            });
+                            return Err(());
+                        }
+
+                        // Lower arguments
+                        let mut ir_args = Vec::new();
+                        for (arg, expected_type) in args.iter().zip(param_types.iter()) {
+                            match arg {
+                                tilt_ast::Value::Variable(var_name) => {
+                                    if let Some((value_id, actual_type)) =
+                                        ctx.lookup_variable(var_name)
+                                    {
+                                        if actual_type != *expected_type {
+                                            ctx.error(SemanticError::TypeMismatch {
+                                                expected: *expected_type,
+                                                found: actual_type,
+                                                location: format!("argument to function '{}'", op),
+                                            });
+                                            return Err(());
+                                        }
+                                        ir_args.push(value_id);
+                                    } else {
+                                        ctx.error(SemanticError::UndefinedIdentifier {
+                                            name: var_name.to_string(),
+                                            location: format!("argument to function '{}'", op),
+                                        });
+                                        return Err(());
+                                    }
+                                }
+                                tilt_ast::Value::Constant(const_val) => {
+                                    // Create a constant instruction for this argument
+                                    let const_value_id = func.next_value();
+                                    func.constants.insert(
+                                        const_value_id,
+                                        (*const_val as i64, *expected_type),
+                                    );
+                                    ir_args.push(const_value_id);
+                                }
+                            }
+                        }
+
+                        return Ok(Instruction::CallVoid {
+                            function: op.to_string(),
+                            args: ir_args,
+                        });
+                    }
+
                     // Handle operations that return void (e.g., store, free)
                     if op.ends_with(".store") {
                         if args.len() != 2 {
@@ -821,11 +1158,11 @@ fn lower_instruction(
                         }
 
                         let (ptr_value, ptr_type) =
-                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                            lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
 
-                        if ptr_type != Type::Ptr {
+                        if ptr_type != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::Ptr,
+                                expected: Type::Usize,
                                 found: ptr_type,
                                 location: format!("first argument to '{}'", op),
                             });
@@ -840,8 +1177,8 @@ fn lower_instruction(
                             Type::F32
                         } else if *op == "f64.store" {
                             Type::F64
-                        } else if *op == "ptr.store" {
-                            Type::Ptr
+                        } else if *op == "usize.store" {
+                            Type::Usize
                         } else {
                             ctx.error(SemanticError::InvalidOperation {
                                 operation: op.to_string(),
@@ -880,11 +1217,11 @@ fn lower_instruction(
                         }
 
                         let (ptr_value, ptr_type) =
-                            lower_value_with_func(ctx, func, &args[0], Type::Ptr)?;
+                            lower_value_with_func(ctx, func, &args[0], Type::Usize)?;
 
-                        if ptr_type != Type::Ptr {
+                        if ptr_type != Type::Usize {
                             ctx.error(SemanticError::TypeMismatch {
-                                expected: Type::Ptr,
+                                expected: Type::Usize,
                                 found: ptr_type,
                                 location: "argument to 'free'".to_string(),
                             });
@@ -964,9 +1301,18 @@ fn lower_terminator(
                 Ok(Terminator::Ret { value: None })
             }
         }
-        tilt_ast::Terminator::Br { label } => {
+        tilt_ast::Terminator::Br { label, args } => {
             if let Some(&target_id) = ctx.block_map.get(*label) {
-                Ok(Terminator::Br { target: target_id })
+                // Lower block arguments
+                let mut lowered_args = Vec::new();
+                for arg in args {
+                    let (arg_id, _) = lower_value_with_func(ctx, func, arg, Type::I32)?; // TODO: infer proper type
+                    lowered_args.push(arg_id);
+                }
+                Ok(Terminator::Br {
+                    target: target_id,
+                    args: lowered_args,
+                })
             } else {
                 ctx.error(SemanticError::UndefinedBlock {
                     label: label.to_string(),
@@ -978,7 +1324,9 @@ fn lower_terminator(
         tilt_ast::Terminator::BrIf {
             cond,
             true_label,
+            true_args,
             false_label,
+            false_args,
         } => {
             let (cond_id, cond_type) = lower_value_with_func(ctx, func, cond, Type::I32)?;
 
@@ -1017,10 +1365,26 @@ fn lower_terminator(
                 return Err(());
             };
 
+            // Lower true branch arguments
+            let mut lowered_true_args = Vec::new();
+            for arg in true_args {
+                let (arg_id, _) = lower_value_with_func(ctx, func, arg, Type::I32)?; // TODO: infer proper type
+                lowered_true_args.push(arg_id);
+            }
+
+            // Lower false branch arguments
+            let mut lowered_false_args = Vec::new();
+            for arg in false_args {
+                let (arg_id, _) = lower_value_with_func(ctx, func, arg, Type::I32)?; // TODO: infer proper type
+                lowered_false_args.push(arg_id);
+            }
+
             Ok(Terminator::BrIf {
                 cond: cond_id,
                 true_target,
+                true_args: lowered_true_args,
                 false_target,
+                false_args: lowered_false_args,
             })
         }
     }
@@ -1080,4 +1444,79 @@ fn lower_value_with_func(
             Ok((const_value_id, expected_type))
         }
     }
+}
+
+/// Handle conversion operations like i32.to_usize, i64.to_i32, etc.
+fn handle_conversion_operation(
+    ctx: &mut LoweringContext,
+    func: &mut Function,
+    dest: &tilt_ast::TypedIdentifier,
+    dest_value_id: ValueId,
+    op: &str,
+    type_part: &str,
+    op_part: &str,
+    args: &[tilt_ast::Value],
+) -> Result<Instruction, ()> {
+    if args.len() != 1 {
+        ctx.error(SemanticError::InvalidOperation {
+            operation: format!("{} with {} arguments (expected 1)", op, args.len()),
+            ty: dest.ty,
+            location: "conversion operation".to_string(),
+        });
+        return Err(());
+    }
+
+    // Parse the conversion: type_part.to_TARGET -> (source_type, target_type)
+    let (source_type, target_type) = match (type_part, op_part) {
+        ("i32", "to_i64") => (Type::I32, Type::I64),
+        ("i32", "to_usize") => (Type::I32, Type::Usize),
+        ("i64", "to_i32") => (Type::I64, Type::I32),
+        ("i64", "to_usize") => (Type::I64, Type::Usize),
+        ("usize", "to_i64") => (Type::Usize, Type::I64),
+        ("usize", "to_i32") => (Type::Usize, Type::I32),
+        _ => {
+            ctx.error(SemanticError::InvalidOperation {
+                operation: op.to_string(),
+                ty: dest.ty,
+                location: "unsupported conversion".to_string(),
+            });
+            return Err(());
+        }
+    };
+
+    // Check that destination type matches the target type
+    if dest.ty != target_type {
+        ctx.error(SemanticError::TypeMismatch {
+            expected: target_type,
+            found: dest.ty,
+            location: format!(
+                "conversion '{}': result type should be {:?} to match destination",
+                op, target_type
+            ),
+        });
+        return Err(());
+    }
+
+    // Lower the operand with the expected source type
+    let (operand_id, operand_type) = lower_value_with_func(ctx, func, &args[0], source_type)?;
+
+    // Check that operand type matches the source type
+    if operand_type != source_type {
+        ctx.error(SemanticError::TypeMismatch {
+            expected: source_type,
+            found: operand_type,
+            location: format!(
+                "conversion '{}': operand expected {:?} but got {:?}",
+                op, source_type, operand_type
+            ),
+        });
+        return Err(());
+    }
+
+    Ok(Instruction::Convert {
+        dest: dest_value_id,
+        src: operand_id,
+        from_ty: source_type,
+        to_ty: target_type,
+    })
 }

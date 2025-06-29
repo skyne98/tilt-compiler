@@ -1,0 +1,3 @@
+Expected Output: -24
+Description: Matrix operations fragile test - fibonacci fill, matrix multiplication, recursive checksum with alternating signs
+Expected calculation: 3x3 fibonacci matrix with alternating sign checksum multiplied by (3+3)=6, result is -24

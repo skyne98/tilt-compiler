@@ -2,8 +2,8 @@
 # This demonstrates the new memory and pointer primitives
 
 # Import the memory allocation functions
-import "host" "alloc" (size:i64) -> ptr
-import "host" "free" (p:ptr) -> void
+import "host" "alloc" (size:i64) -> usize
+import "host" "free" (p:usize) -> void
 
 # A simple function that demonstrates pointer arithmetic and memory allocation
 fn test_memory() -> i32 {
@@ -11,7 +11,7 @@ entry:
     # Allocate 8 bytes for two i32 values
     size:i64 = sizeof.i32()
     size2:i64 = i64.add(size, size)
-    mem_ptr:ptr = alloc(size2)
+    mem_ptr:usize = alloc(size2)
     
     # Store values at different offsets
     val1:i32 = i32.const(42)
@@ -22,7 +22,7 @@ entry:
     
     # Calculate pointer to second i32 (offset 4)
     offset:i64 = sizeof.i32()
-    ptr2:ptr = ptr.add(mem_ptr, offset)
+    ptr2:usize = usize.add(mem_ptr, offset)
     
     # Store second value at offset 4
     i32.store(ptr2, val2)

@@ -1,10 +1,10 @@
-import "host" "alloc" (size:i64) -> ptr
-import "host" "free" (p:ptr) -> void
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
 
 fn sum_array() -> i32 {
 entry:
-    size:i64 = i64.const(4)
-    ptr:ptr = alloc(size)
+    size:usize = usize.const(4)
+    ptr:usize = alloc(size)
     
     # Store values at same memory location (overwrite test)
     value1:i32 = i32.const(10)

@@ -1,17 +1,11 @@
-// ===================================================================
-// FILE: lib.rs (tilt-codegen-cranelift crate)
-//
-// DESC: JIT compiler backend using Cranelift to compile TILT IR
-//       to native machine code.
-// ===================================================================
-
+use cranelift::codegen::ir::BlockArg;
 use cranelift::prelude::*;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module};
 use std::collections::HashMap;
 use tilt_ast::Type as IRType;
-use tilt_host_abi::{HostABI, JITMemoryHostABI, RuntimeValue};
+use tilt_host_abi::{HostABI, JITMemoryHostABI};
 use tilt_ir::{
     BinaryOperator, BlockId, Function as IRFunction, Instruction, Program, Terminator,
     UnaryOperator, ValueId,
@@ -23,11 +17,6 @@ mod tests;
 #[cfg(test)]
 mod memory_jit_tests;
 
-/// Global static to hold the Host ABI instance for JIT host function calls.
-/// This is a workaround for Cranelift's requirement that host functions be static.
-static mut GLOBAL_HOST_ABI: Option<Box<dyn HostABI + Send + Sync>> = None;
-static mut HOST_ABI_INITIALIZED: bool = false;
-
 pub struct JIT {
     /// The main JIT module, which manages function compilation and linking.
     module: JITModule,
@@ -35,6 +24,8 @@ pub struct JIT {
     function_ids: HashMap<String, FuncId>,
     /// Whether to show Cranelift IR during compilation
     show_cranelift_ir: bool,
+    /// Host ABI for handling host function calls
+    host_abi: Box<dyn HostABI + Send + Sync>,
 }
 
 impl JIT {
@@ -43,12 +34,6 @@ impl JIT {
     }
 
     pub fn new_with_abi(host_abi: Box<dyn HostABI + Send + Sync>) -> Result<Self, String> {
-        // Initialize the global Host ABI (unsafe due to global state)
-        unsafe {
-            GLOBAL_HOST_ABI = Some(host_abi);
-            HOST_ABI_INITIALIZED = true;
-        }
-
         // Create a JIT builder. We register dynamic host functions here.
         let mut builder = JITBuilder::new(cranelift_module::default_libcall_names())
             .map_err(|e| format!("Failed to create JIT builder: {}", e))?;
@@ -70,6 +55,7 @@ impl JIT {
             module,
             function_ids: HashMap::new(),
             show_cranelift_ir: false,
+            host_abi,
         })
     }
 
@@ -404,7 +390,13 @@ impl<'a> Translator<'a> {
                 let cl_value = match ty {
                     IRType::I32 => self.builder.ins().iconst(types::I32, *value),
                     IRType::I64 => self.builder.ins().iconst(types::I64, *value),
-                    IRType::Ptr => self.builder.ins().iconst(types::I64, *value),
+                    IRType::Usize => {
+                        if cfg!(target_pointer_width = "64") {
+                            self.builder.ins().iconst(types::I64, *value)
+                        } else {
+                            self.builder.ins().iconst(types::I32, *value)
+                        }
+                    }
                     IRType::F32 => self.builder.ins().f32const(*value as f32),
                     IRType::F64 => self.builder.ins().f64const(*value as f64),
                     _ => return Err(format!("Constant type {:?} not supported", ty)),
@@ -455,11 +447,16 @@ impl<'a> Translator<'a> {
                     IRType::I64 => 8,
                     IRType::F32 => 4,
                     IRType::F64 => 8,
-                    IRType::Ptr => 8, // Assume 64-bit pointers
+                    IRType::Usize => std::mem::size_of::<usize>() as i64, // Platform-dependent
                     IRType::Void => 0,
                 };
 
-                let size_val = self.builder.ins().iconst(types::I64, size);
+                // SizeOf returns usize, so we use the appropriate type based on platform
+                let size_val = if cfg!(target_pointer_width = "64") {
+                    self.builder.ins().iconst(types::I64, size)
+                } else {
+                    self.builder.ins().iconst(types::I32, size)
+                };
                 self.value_map.insert(*dest, size_val);
                 Ok(())
             }
@@ -501,6 +498,75 @@ impl<'a> Translator<'a> {
                 self.builder.ins().call(free_func_ref, &[ptr_val]);
                 Ok(())
             }
+
+            Instruction::Convert {
+                dest,
+                src,
+                from_ty,
+                to_ty,
+            } => {
+                let src_val = self.get_value_or_constant(*src)?;
+
+                // Perform type conversion using Cranelift instructions
+                let result = match (from_ty, to_ty) {
+                    (IRType::I32, IRType::I64) => {
+                        // Sign-extend i32 to i64
+                        self.builder.ins().sextend(types::I64, src_val)
+                    }
+                    (IRType::I32, IRType::Usize) => {
+                        // Sign-extend i32 to usize
+                        if cfg!(target_pointer_width = "64") {
+                            self.builder.ins().sextend(types::I64, src_val)
+                        } else {
+                            // On 32-bit platforms, i32 is already usize
+                            src_val
+                        }
+                    }
+                    (IRType::I64, IRType::I32) => {
+                        // Truncate i64 to i32
+                        self.builder.ins().ireduce(types::I32, src_val)
+                    }
+                    (IRType::Usize, IRType::I64) => {
+                        // Convert usize to i64
+                        if cfg!(target_pointer_width = "64") {
+                            // On 64-bit platforms, usize is already i64, so just return as-is
+                            src_val
+                        } else {
+                            // On 32-bit platforms, sign-extend usize (i32) to i64
+                            self.builder.ins().sextend(types::I64, src_val)
+                        }
+                    }
+                    (IRType::Usize, IRType::I32) => {
+                        // Convert usize to i32
+                        if cfg!(target_pointer_width = "64") {
+                            // On 64-bit platforms, truncate usize (i64) to i32
+                            self.builder.ins().ireduce(types::I32, src_val)
+                        } else {
+                            // On 32-bit platforms, usize is already i32, so just return as-is
+                            src_val
+                        }
+                    }
+                    (IRType::I64, IRType::Usize) => {
+                        // Convert i64 to usize
+                        if cfg!(target_pointer_width = "64") {
+                            // On 64-bit platforms, usize is i64, so just return as-is
+                            src_val
+                        } else {
+                            // On 32-bit platforms, truncate i64 to usize (i32)
+                            self.builder.ins().ireduce(types::I32, src_val)
+                        }
+                    }
+                    _ => {
+                        return Err(format!(
+                            "Unsupported type conversion from {:?} to {:?}",
+                            from_ty, to_ty
+                        ));
+                    }
+                };
+
+                self.value_map.insert(*dest, result);
+                Ok(())
+            }
         }
     }
 
@@ -515,19 +581,37 @@ impl<'a> Translator<'a> {
                 }
                 Ok(())
             }
-            Terminator::Br { target } => {
+            Terminator::Br { target, args } => {
                 let cl_target = self
                     .block_map
                     .get(target)
                     .copied()
                     .ok_or_else(|| format!("Branch target {:?} not found", target))?;
-                self.builder.ins().jump(cl_target, &[]);
+
+                if args.is_empty() {
+                    // Simple jump without arguments
+                    self.builder.ins().jump(cl_target, &[]);
+                } else {
+                    // Resolve argument values for block parameters
+                    let cl_args: Result<Vec<Value>, String> = args
+                        .iter()
+                        .map(|arg| self.get_value_or_constant(*arg))
+                        .collect();
+                    let cl_args = cl_args?;
+
+                    // Convert Values to BlockArgs and jump with block arguments
+                    let block_args: Vec<BlockArg> =
+                        cl_args.into_iter().map(BlockArg::Value).collect();
+                    self.builder.ins().jump(cl_target, block_args.iter());
+                }
                 Ok(())
             }
             Terminator::BrIf {
                 cond,
                 true_target,
+                true_args,
                 false_target,
+                false_args,
             } => {
                 let cond_val = self.get_value_or_constant(*cond)?;
                 let true_block = self
@@ -541,9 +625,39 @@ impl<'a> Translator<'a> {
                     .copied()
                     .ok_or_else(|| format!("False target {:?} not found", false_target))?;
 
-                self.builder
-                    .ins()
-                    .brif(cond_val, true_block, &[], false_block, &[]);
+                if true_args.is_empty() && false_args.is_empty() {
+                    self.builder
+                        .ins()
+                        .brif(cond_val, true_block, &[], false_block, &[]);
+                } else {
+                    // Resolve arguments for both branches
+                    let true_cl_args: Result<Vec<Value>, String> = true_args
+                        .iter()
+                        .map(|arg| self.get_value_or_constant(*arg))
+                        .collect();
+                    let true_cl_args = true_cl_args?;
+
+                    let false_cl_args: Result<Vec<Value>, String> = false_args
+                        .iter()
+                        .map(|arg| self.get_value_or_constant(*arg))
+                        .collect();
+                    let false_cl_args = false_cl_args?;
+
+                    // Convert Values to BlockArgs
+                    let true_block_args: Vec<BlockArg> =
+                        true_cl_args.into_iter().map(BlockArg::Value).collect();
+                    let false_block_args: Vec<BlockArg> =
+                        false_cl_args.into_iter().map(BlockArg::Value).collect();
+
+                    // Conditional branch with block arguments
+                    self.builder.ins().brif(
+                        cond_val,
+                        true_block,
+                        true_block_args.iter(),
+                        false_block,
+                        false_block_args.iter(),
+                    );
+                }
                 Ok(())
             }
         }
@@ -555,7 +669,13 @@ impl<'a> Translator<'a> {
         match ty {
             IRType::I32 => self.builder.ins().iconst(types::I32, value),
             IRType::I64 => self.builder.ins().iconst(types::I64, value),
-            IRType::Ptr => self.builder.ins().iconst(types::I64, value),
+            IRType::Usize => {
+                if cfg!(target_pointer_width = "64") {
+                    self.builder.ins().iconst(types::I64, value)
+                } else {
+                    self.builder.ins().iconst(types::I32, value)
+                }
+            }
             IRType::F32 => self.builder.ins().f32const(value as f32),
             IRType::F64 => self.builder.ins().f64const(value as f64),
             IRType::Void => self.builder.ins().iconst(types::I8, 0), // Placeholder
@@ -584,80 +704,102 @@ fn translate_type(ir_type: &IRType) -> types::Type {
         IRType::I64 => types::I64,
         IRType::F32 => types::F32,
         IRType::F64 => types::F64,
-        IRType::Ptr => types::I64, // Pointers are 64-bit integers
+        IRType::Usize => {
+            // Use the native pointer size for the target platform
+            if cfg!(target_pointer_width = "64") {
+                types::I64
+            } else {
+                types::I32
+            }
+        }
         IRType::Void => types::I8, // Placeholder, void functions return nothing
     }
 }
 
-// Host function implementations that dispatch to the Host ABI
-// These functions are registered with Cranelift and called from JIT'd code
-
-/// Helper function to safely call the global Host ABI
-unsafe fn call_host_abi(function_name: &str, args: &[RuntimeValue]) -> RuntimeValue {
-    if let Some(ref mut abi) = GLOBAL_HOST_ABI {
-        match abi.call_host_function(function_name, args) {
-            Ok(result) => result,
-            Err(err) => {
-                eprintln!("Host function error: {}", err);
-                RuntimeValue::Void
-            }
-        }
-    } else {
-        eprintln!("Host ABI not initialized");
-        RuntimeValue::Void
-    }
-}
+// Host function implementations
+// For now, these are simple implementations that don't use the dynamic ABI
+// In the future, we could implement proper per-instance ABI support
 
 fn host_print_hello() {
-    unsafe {
-        call_host_abi("print_hello", &[]);
-    }
+    print!("Hello from JIT!");
 }
 
 fn host_print_char(c: i32) {
-    unsafe {
-        call_host_abi("print_char", &[RuntimeValue::I32(c)]);
+    if let Some(ch) = char::from_u32(c as u32) {
+        print!("{}", ch);
     }
 }
 
 fn host_print_i32(value: i32) {
-    unsafe {
-        call_host_abi("print_i32", &[RuntimeValue::I32(value)]);
-    }
+    print!("{}", value);
 }
 
 fn host_print_i64(value: i64) {
-    unsafe {
-        call_host_abi("print_i64", &[RuntimeValue::I64(value)]);
-    }
+    print!("{}", value);
 }
 
 fn host_println() {
-    unsafe {
-        call_host_abi("println", &[]);
-    }
+    println!();
 }
 
 fn host_read_i32() -> i32 {
-    unsafe {
-        match call_host_abi("read_i32", &[]) {
-            RuntimeValue::I32(val) => val,
-            _ => 0, // Default value on error
-        }
+    use std::io::{self, Write};
+    print!("Enter i32: ");
+    io::stdout().flush().unwrap();
+
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
+    input.trim().parse().unwrap_or(0)
+}
+
+#[cfg(target_pointer_width = "64")]
+fn host_alloc(size: u64) -> u64 {
+    use std::alloc::{alloc, Layout};
+    if size == 0 {
+        return 0;
+    }
+
+    let layout = Layout::from_size_align(size as usize, 8).unwrap();
+    let ptr = unsafe { alloc(layout) };
+    if ptr.is_null() {
+        0
+    } else {
+        ptr as u64
     }
 }
 
-fn host_alloc(size: i64) -> u64 {
-    unsafe {
-        match call_host_abi("alloc", &[RuntimeValue::I64(size)]) {
-            RuntimeValue::Ptr(addr) => addr,
-            _ => 0, // Null pointer on error
-        }
+#[cfg(target_pointer_width = "32")]
+fn host_alloc(size: u32) -> u32 {
+    use std::alloc::{alloc, Layout};
+    if size == 0 {
+        return 0;
+    }
+
+    let layout = Layout::from_size_align(size as usize, 4).unwrap();
+    let ptr = unsafe { alloc(layout) };
+    if ptr.is_null() {
+        0
+    } else {
+        ptr as u32
     }
 }
 
+#[cfg(target_pointer_width = "64")]
 fn host_free(ptr: u64) {
-    unsafe {
-        call_host_abi("free", &[RuntimeValue::Ptr(ptr)]);
+    if ptr != 0 {
+        // Note: This is unsafe because we don't know the original size
+        // In a real implementation, we'd need to track allocations
+        // For now, we'll just leak memory to avoid crashes
+        // TODO: Implement proper allocation tracking
+    }
+}
+
+#[cfg(target_pointer_width = "32")]
+fn host_free(ptr: u32) {
+    if ptr != 0 {
+        // Note: This is unsafe because we don't know the original size
+        // In a real implementation, we'd need to track allocations
+        // For now, we'll just leak memory to avoid crashes
+        // TODO: Implement proper allocation tracking
     }
 }

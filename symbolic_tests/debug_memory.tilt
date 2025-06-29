@@ -1,0 +1,36 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+import "host" "print_i32" (x:i32) -> void
+
+# Debug the memory allocation issue step by step
+fn debug_allocation() -> i32 {
+entry:
+    # Test 1: Basic allocation
+    size1:i64 = i64.const(8)
+    ptr1:ptr = alloc(size1)
+    
+    # Test 2: Store and load a simple value
+    val:i32 = i32.const(42)
+    i32.store(ptr1, val)
+    result:i32 = i32.load(ptr1)
+    print_i32(result)  # Should print 42
+    
+    free(ptr1)
+    
+    # Test 3: Check sizeof operation
+    sz:i64 = sizeof.i32()
+    # Convert i64 to i32 for printing
+    temp_ptr:ptr = alloc(size1)
+    i64.store(temp_ptr, sz)
+    sz_as_i32:i32 = i32.load(temp_ptr)
+    print_i32(sz_as_i32)  # Should print 4
+    free(temp_ptr)
+    
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = debug_allocation()
+    ret (result)
+}

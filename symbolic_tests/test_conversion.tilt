@@ -1,0 +1,31 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+import "host" "print_i32" (x:i32) -> void
+
+# Test the i32->i64 conversion that might be causing issues
+fn test_type_conversion() -> i32 {
+entry:
+    # Test the conversion hack used in point_array_create
+    count:i32 = i32.const(4)
+    
+    temp_size:i64 = i64.const(4)
+    temp_ptr:ptr = alloc(temp_size)
+    i32.store(temp_ptr, count)
+    count_i64:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    
+    # Convert back to i32 for printing
+    temp_ptr2:ptr = alloc(temp_size)
+    i64.store(temp_ptr2, count_i64)
+    result:i32 = i32.load(temp_ptr2)
+    print_i32(result)  # Should print 4
+    free(temp_ptr2)
+    
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_type_conversion()
+    ret (result)
+}

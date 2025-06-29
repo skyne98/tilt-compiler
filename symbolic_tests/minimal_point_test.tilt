@@ -1,0 +1,40 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+# Simple point creation test
+fn test_point() -> i32 {
+entry:
+    # Allocate 8 bytes for a point
+    size:i64 = i64.const(8)
+    point_ptr:ptr = alloc(size)
+    
+    # Store x=10 at offset 0
+    x_val:i32 = i32.const(10)
+    zero_offset:i64 = i64.const(0)
+    x_ptr:ptr = ptr.add(point_ptr, zero_offset)
+    i32.store(x_ptr, x_val)
+    
+    # Store y=20 at offset 4
+    y_val:i32 = i32.const(20)
+    y_offset:i64 = i64.const(4)
+    y_ptr:ptr = ptr.add(point_ptr, y_offset)
+    i32.store(y_ptr, y_val)
+    
+    # Read back x
+    x_read:i32 = i32.load(x_ptr)
+    
+    # Read back y  
+    y_read:i32 = i32.load(y_ptr)
+    
+    # Sum them
+    result:i32 = i32.add(x_read, y_read)
+    
+    free(point_ptr)
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_point()
+    ret (result)
+}

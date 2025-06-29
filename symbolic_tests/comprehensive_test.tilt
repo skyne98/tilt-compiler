@@ -1,11 +1,11 @@
-import "host" "alloc" (size:i64) -> ptr
-import "host" "free" (p:ptr) -> void
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
 
 fn main() -> i32 {
 entry:
     # Test comprehensive memory and arithmetic operations
-    size:i64 = i64.const(4)
-    ptr:ptr = alloc(size)
+    size:usize = usize.const(4)
+    ptr:usize = alloc(size)
     
     # Store first value
     val1:i32 = i32.const(100)

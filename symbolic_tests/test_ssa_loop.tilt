@@ -1,0 +1,31 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+# Test simple SSA loops with block parameters
+fn test_loop_sum() -> i32 {
+entry:
+    # Sum numbers 1 + 2 + 3 + 4 = 10
+    total_init:i32 = i32.const(0)
+    counter_init:i32 = i32.const(1)
+    max:i32 = i32.const(5)
+    br loop_start(total_init, counter_init)
+
+loop_start(total:i32, counter:i32):
+    condition:i32 = i32.lt(counter, max)
+    br_if condition, loop_body, loop_done
+
+loop_body:
+    new_total:i32 = i32.add(total, counter)
+    one:i32 = i32.const(1)
+    new_counter:i32 = i32.add(counter, one)
+    br loop_start(new_total, new_counter)
+
+loop_done:
+    ret (total)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_loop_sum()
+    ret (result)
+}

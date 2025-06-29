@@ -6,10 +6,10 @@
 // ===================================================================
 
 use crate::JIT;
+use logos::Logos;
 use tilt_host_abi::{JITMemoryHostABI, RuntimeValue};
 use tilt_ir::lowering::lower_program;
 use tilt_parser::{lexer::Token, tilt::ProgramParser};
-use logos::Logos;
 
 fn parse_and_lower(source: &str) -> Result<tilt_ir::Program, String> {
     // Tokenize
@@ -36,7 +36,8 @@ fn parse_and_lower(source: &str) -> Result<tilt_ir::Program, String> {
 
     // Parse
     let parser = ProgramParser::new();
-    let ast = parser.parse(tokens)
+    let ast = parser
+        .parse(tokens)
         .map_err(|e| format!("Parsing failed: {:?}", e))?;
 
     // Lower to IR
@@ -51,10 +52,10 @@ fn parse_and_lower(source: &str) -> Result<tilt_ir::Program, String> {
 
 fn execute_jit_program(source: &str) -> Result<RuntimeValue, String> {
     let program = parse_and_lower(source)?;
-    
+
     let host_abi = Box::new(JITMemoryHostABI::new());
-    let mut jit = JIT::new_with_abi(host_abi)
-        .map_err(|e| format!("Failed to create JIT: {}", e))?;
+    let mut jit =
+        JIT::new_with_abi(host_abi).map_err(|e| format!("Failed to create JIT: {}", e))?;
 
     // Enable Cranelift IR output for debugging
     jit.set_show_cranelift_ir(true);
@@ -62,10 +63,13 @@ fn execute_jit_program(source: &str) -> Result<RuntimeValue, String> {
     jit.compile(&program)
         .map_err(|e| format!("JIT compilation failed: {}", e))?;
 
-    let main_ptr = jit.get_func_ptr("main")
+    let main_ptr = jit
+        .get_func_ptr("main")
         .ok_or("Main function not found in JIT compiled code")?;
 
-    let main_function = program.functions.iter()
+    let main_function = program
+        .functions
+        .iter()
         .find(|f| f.name == "main")
         .ok_or("Main function not found in program")?;
 
@@ -81,14 +85,20 @@ fn execute_jit_program(source: &str) -> Result<RuntimeValue, String> {
                 let result = main_fn();
                 Ok(RuntimeValue::I64(result))
             }
+            tilt_ast::Type::Usize => {
+                let main_fn = std::mem::transmute::<*const u8, fn() -> usize>(main_ptr);
+                let result = main_fn();
+                Ok(RuntimeValue::Usize(result))
+            }
             tilt_ast::Type::Void => {
                 let main_fn = std::mem::transmute::<*const u8, fn()>(main_ptr);
                 main_fn();
                 Ok(RuntimeValue::Void)
             }
-            _ => {
-                Err(format!("Unsupported main function return type: {:?}", main_function.return_type))
-            }
+            _ => Err(format!(
+                "Unsupported main function return type: {:?}",
+                main_function.return_type
+            )),
         }
     }
 }
@@ -114,43 +124,49 @@ mod tests {
     #[test]
     fn test_jit_sizeof_operation() {
         let source = r#"
-            fn main() -> i64 {
+            fn main() -> usize {
             entry:
-                size:i64 = sizeof.i32()
+                size:usize = sizeof.i32()
                 ret (size)
             }
         "#;
 
         let result = execute_jit_program(source).expect("JIT execution should succeed");
-        assert_eq!(result, RuntimeValue::I64(4));
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(result, RuntimeValue::Usize(4));
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(result, RuntimeValue::Usize(4));
     }
 
     #[test]
     fn test_jit_multiple_sizeof() {
         let source = r#"
-            fn main() -> i64 {
+            fn main() -> usize {
             entry:
-                size1:i64 = sizeof.i32()
-                size2:i64 = sizeof.i64()
-                total:i64 = i64.add(size1, size2)
+                size1:usize = sizeof.i32()
+                size2:usize = sizeof.i64()
+                total:usize = usize.add(size1, size2)
                 ret (total)
             }
         "#;
 
         let result = execute_jit_program(source).expect("JIT execution should succeed");
-        assert_eq!(result, RuntimeValue::I64(12)); // 4 + 8
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(result, RuntimeValue::Usize(12)); // 4 + 8
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(result, RuntimeValue::Usize(12)); // 4 + 8
     }
 
     #[test]
     fn test_jit_simple_allocation() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn main() -> i32 {
             entry:
-                size:i64 = i64.const(8)
-                ptr:ptr = alloc(size)
+                size:usize = usize.const(8)
+                ptr:usize = alloc(size)
                 free(ptr)
                 result:i32 = i32.const(1)
                 ret (result)
@@ -164,13 +180,13 @@ mod tests {
     #[test]
     fn test_jit_alloc_free_basic() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn main() -> void {
             entry:
-                size:i64 = sizeof.i32()
-                ptr:ptr = alloc(size)
+                size:usize = sizeof.i32()
+                ptr:usize = alloc(size)
                 free(ptr)
                 ret
             }
@@ -183,13 +199,13 @@ mod tests {
     #[test]
     fn test_jit_store_load_simple() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn main() -> i32 {
             entry:
-                size:i64 = sizeof.i32()
-                ptr:ptr = alloc(size)
+                size:usize = sizeof.i32()
+                ptr:usize = alloc(size)
                 value:i32 = i32.const(42)
                 i32.store(ptr, value)
                 loaded:i32 = i32.load(ptr)
@@ -205,19 +221,19 @@ mod tests {
     #[test]
     fn test_jit_pointer_arithmetic() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn main() -> i32 {
             entry:
-                size:i64 = i64.const(8)
-                ptr:ptr = alloc(size)
+                size:usize = usize.const(8)
+                ptr:usize = alloc(size)
                 
                 val1:i32 = i32.const(10)
                 i32.store(ptr, val1)
                 
-                offset:i64 = sizeof.i32()
-                ptr2:ptr = ptr.add(ptr, offset)
+                offset:usize = sizeof.i32()
+                ptr2:usize = usize.add(ptr, offset)
                 val2:i32 = i32.const(20)
                 i32.store(ptr2, val2)
                 
@@ -237,13 +253,13 @@ mod tests {
     #[test]
     fn test_jit_function_call_with_memory() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn allocate_and_store(value:i32) -> i32 {
             entry:
-                size:i64 = sizeof.i32()
-                ptr:ptr = alloc(size)
+                size:usize = sizeof.i32()
+                ptr:usize = alloc(size)
                 i32.store(ptr, value)
                 loaded:i32 = i32.load(ptr)
                 free(ptr)
@@ -265,31 +281,31 @@ mod tests {
     #[test]
     fn test_jit_complex_memory_operations() {
         let source = r#"
-            import "host" "alloc" (size:i64) -> ptr
-            import "host" "free" (p:ptr) -> void
+            import "host" "alloc" (size:usize) -> usize
+            import "host" "free" (p:usize) -> void
 
             fn main() -> i32 {
             entry:
                 # Allocate space for 3 i32 values  
-                element_size:i64 = sizeof.i32()
-                count:i64 = i64.const(3)
-                total_size:i64 = i64.mul(element_size, count)
-                ptr:ptr = alloc(total_size)
+                element_size:usize = sizeof.i32()
+                count:usize = usize.const(3)
+                total_size:usize = usize.mul(element_size, count)
+                ptr:usize = alloc(total_size)
                 
                 # Store values at different offsets
                 val1:i32 = i32.const(100)
                 i32.store(ptr, val1)
                 
-                offset1:i64 = sizeof.i32()
-                ptr2:ptr = ptr.add(ptr, offset1)
+                offset1:usize = sizeof.i32()
+                ptr2:usize = usize.add(ptr, offset1)
                 val2:i32 = i32.const(200)
                 i32.store(ptr2, val2)
                 
                 # Calculate offset for third element: 2 * sizeof(i32)
-                two:i64 = i64.const(2)
-                element_size_2:i64 = sizeof.i32()
-                offset2:i64 = i64.mul(element_size_2, two)
-                ptr3:ptr = ptr.add(ptr, offset2)
+                two:usize = usize.const(2)
+                element_size_2:usize = sizeof.i32()
+                offset2:usize = usize.mul(element_size_2, two)
+                ptr3:usize = usize.add(ptr, offset2)
                 val3:i32 = i32.const(300)
                 i32.store(ptr3, val3)
                 

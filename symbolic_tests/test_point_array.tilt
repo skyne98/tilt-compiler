@@ -1,0 +1,82 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+
+# Test just the point array operations without complex loops
+fn point_size() -> i64 {
+entry:
+    x_size:i64 = sizeof.i32()
+    y_size:i64 = sizeof.i32()
+    total:i64 = i64.add(x_size, y_size)
+    ret (total)
+}
+
+fn point_array_create(count:i32) -> ptr {
+entry:
+    # Convert i32 index to i64
+    temp_size:i64 = i64.const(4)
+    temp_ptr:ptr = alloc(temp_size)
+    i32.store(temp_ptr, count)
+    count_i64:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    
+    point_sz:i64 = point_size()
+    total_size:i64 = i64.mul(count_i64, point_sz)
+    array_ptr:ptr = alloc(total_size)
+    ret (array_ptr)
+}
+
+fn point_array_get(array:ptr, index:i32) -> ptr {
+entry:
+    # Convert i32 index to i64
+    temp_size:i64 = i64.const(4)
+    temp_ptr:ptr = alloc(temp_size)
+    i32.store(temp_ptr, index)
+    index_i64:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    
+    point_sz:i64 = point_size()
+    offset:i64 = i64.mul(index_i64, point_sz)
+    element_ptr:ptr = ptr.add(array, offset)
+    ret (element_ptr)
+}
+
+fn point_set_x(point:ptr, new_x:i32) -> void {
+entry:
+    zero_offset:i64 = i64.const(0)
+    x_ptr:ptr = ptr.add(point, zero_offset)
+    i32.store(x_ptr, new_x)
+    ret
+}
+
+fn point_get_x(point:ptr) -> i32 {
+entry:
+    zero_offset:i64 = i64.const(0)
+    x_ptr:ptr = ptr.add(point, zero_offset)
+    x:i32 = i32.load(x_ptr)
+    ret (x)
+}
+
+fn test_array_operations() -> i32 {
+entry:
+    # Create array of 2 points
+    count:i32 = i32.const(2)
+    array:ptr = point_array_create(count)
+    
+    # Set first point x to 10
+    idx0:i32 = i32.const(0)
+    point0:ptr = point_array_get(array, idx0)
+    x_val:i32 = i32.const(10)
+    point_set_x(point0, x_val)
+    
+    # Read it back
+    result:i32 = point_get_x(point0)
+    
+    free(array)
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_array_operations()
+    ret (result)
+}

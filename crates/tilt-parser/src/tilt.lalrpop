@@ -31,7 +31,7 @@ extern {
         "i64" => Token::TI64,
         "f32" => Token::TF32,
         "f64" => Token::TF64,
-        "ptr" => Token::TPtr,
+        "usize" => Token::TUsize,
         "void" => Token::TVoid,
 
         // Punctuation
@@ -59,7 +59,7 @@ pub Type: Type = {
     "i64" => Type::I64,
     "f32" => Type::F32,
     "f64" => Type::F64,
-    "ptr" => Type::Ptr,
+    "usize" => Type::Usize,
     "void" => Type::Void,
 };
 
@@ -67,7 +67,7 @@ pub Type: Type = {
 pub Identifier: &'input str = {
     "identifier" => <>,
     // Allow type keywords to be used as variable names
-    "ptr" => "ptr",
+    "usize" => "usize",
     "i32" => "i32", 
     "i64" => "i64",
     "f32" => "f32",
@@ -102,7 +102,7 @@ pub Expression: Expression<'input> = {
     "call" <name:Identifier> "(" ")" => Expression::Call { name, args: Vec::new() },
     "call" <name:Identifier> "(" <args:ArgumentList> ")" => Expression::Call { name, args },
     
-    // Operations with arguments (e.g., ptr.add, ptr.load, etc.) - use parentheses to disambiguate
+    // Operations with arguments (e.g., usize.add, usize.load, etc.) - use parentheses to disambiguate
     <op:Identifier> "(" <args:ArgumentList> ")" => Expression::Operation { op, args },
     
     // Operations without arguments (e.g., sizeof) - must have parentheses for consistency
@@ -120,12 +120,17 @@ pub Instruction: Instruction<'input> = {
 
 // Simple terminator parsing
 pub Terminator: Terminator<'input> = {
-    // Branch
-    "br" <label:Identifier> => Terminator::Br { label },
+    // Branch with arguments: br label(arg1, arg2, ...)
+    "br" <label:Identifier> "(" <args:ArgumentList> ")" => Terminator::Br { label, args },
+    // Branch without arguments: br label
+    "br" <label:Identifier> => Terminator::Br { label, args: Vec::new() },
     
-    // Conditional branch
+    // Conditional branch with arguments: br_if cond, true_label(args), false_label(args)
+    "br_if" <cond:Value> "," <true_label:Identifier> "(" <true_args:ArgumentList> ")" "," <false_label:Identifier> "(" <false_args:ArgumentList> ")" => 
+        Terminator::BrIf { cond, true_label, true_args, false_label, false_args },
+    // Conditional branch without arguments: br_if cond, true_label, false_label
     "br_if" <cond:Value> "," <true_label:Identifier> "," <false_label:Identifier> => 
-        Terminator::BrIf { cond, true_label, false_label },
+        Terminator::BrIf { cond, true_label, true_args: Vec::new(), false_label, false_args: Vec::new() },
         
     // Return with value using parentheses to make it unambiguous
     "ret" "(" <value:Value> ")" => Terminator::Ret(Some(value)),
@@ -136,8 +141,12 @@ pub Terminator: Terminator<'input> = {
 
 // Block parsing
 pub Block: Block<'input> = {
+    // Block with parameters: label(param1:type, param2:type): instructions terminator
+    <label:Identifier> "(" <params:ParameterList> ")" ":" <instructions:Instruction*> <terminator:Terminator> => 
+        Block { label, params, instructions, terminator },
+    // Block without parameters: label: instructions terminator  
     <label:Identifier> ":" <instructions:Instruction*> <terminator:Terminator> => 
-        Block { label, instructions, terminator },
+        Block { label, params: Vec::new(), instructions, terminator },
 };
 
 // Simple import declaration parsing with optional calling convention

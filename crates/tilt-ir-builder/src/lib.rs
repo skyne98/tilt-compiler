@@ -82,6 +82,7 @@ impl<'a> FunctionBuilder<'a> {
             Instruction::PtrAdd { dest, .. } => *dest,
             Instruction::SizeOf { dest, .. } => *dest,
             Instruction::Alloc { dest, .. } => *dest,
+            Instruction::Convert { dest, .. } => *dest,
             Instruction::CallVoid { .. } | Instruction::Store { .. } | Instruction::Free { .. } => {
                 // These instructions don't produce values
                 ValueId::new(0) // This shouldn't be used
@@ -170,6 +171,25 @@ impl<'a, 'b> InstructionBuilder<'a, 'b> {
         dest
     }
 
+    /// Build a constant instruction for usize
+    pub fn const_usize(&mut self, value: usize) -> ValueId {
+        let dest = self.builder.func.next_value();
+        let instr = Instruction::Const {
+            dest,
+            value: value as i64,
+            ty: Type::Usize,
+        };
+
+        // Also add to constants map
+        self.builder
+            .func
+            .constants
+            .insert(dest, (value as i64, Type::Usize));
+
+        self.builder.add_instruction(instr);
+        dest
+    }
+
     /// Build a binary operation instruction
     pub fn binary_op(
         &mut self,
@@ -226,14 +246,19 @@ impl<'a, 'b> InstructionBuilder<'a, 'b> {
         let terminator = Terminator::BrIf {
             cond: condition,
             true_target: then_block,
+            true_args: vec![],
             false_target: else_block,
+            false_args: vec![],
         };
         self.builder.set_terminator(terminator);
     }
 
     /// Build an unconditional jump instruction
     pub fn jump(&mut self, target: BlockId) {
-        let terminator = Terminator::Br { target };
+        let terminator = Terminator::Br {
+            target,
+            args: vec![],
+        };
         self.builder.set_terminator(terminator);
     }
 
@@ -311,7 +336,14 @@ impl ProgramBuilder {
     }
 
     /// Add an import with calling convention to the program
-    pub fn add_import_with_cc(&mut self, module: &str, name: &str, calling_convention: Option<String>, params: Vec<Type>, return_type: Type) {
+    pub fn add_import_with_cc(
+        &mut self,
+        module: &str,
+        name: &str,
+        calling_convention: Option<String>,
+        params: Vec<Type>,
+        return_type: Type,
+    ) {
         self.program.imports.push(ImportDecl {
             module: module.to_string(),
             name: name.to_string(),

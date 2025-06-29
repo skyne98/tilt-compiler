@@ -1,0 +1,264 @@
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
+
+# Emulate a struct Point { x: i32, y: i32 } using memory layout
+# Point size = 8 bytes (two i32 fields)
+# Offset 0: x field (i32)
+# Offset 4: y field (i32)
+
+fn point_size() -> usize {
+entry:
+    x_size:usize = sizeof.i32()
+    y_size:usize = sizeof.i32()
+    total:usize = usize.add(x_size, y_size)
+    ret (total)
+}
+
+fn point_create(x:i32, y:i32) -> usize {
+entry:
+    size:usize = point_size()
+    point_ptr:usize = alloc(size)
+    
+    # Store x at offset 0
+    zero_offset:usize = usize.const(0)
+    x_ptr:usize = usize.add(point_ptr, zero_offset)
+    i32.store(x_ptr, x)
+    
+    # Store y at offset 4
+    y_offset:usize = sizeof.i32()
+    y_ptr:usize = usize.add(point_ptr, y_offset)
+    i32.store(y_ptr, y)
+    
+    ret (point_ptr)
+}
+
+fn point_get_x(point:usize) -> i32 {
+entry:
+    zero_offset:usize = usize.const(0)
+    x_ptr:usize = usize.add(point, zero_offset)
+    x:i32 = i32.load(x_ptr)
+    ret (x)
+}
+
+fn point_get_y(point:usize) -> i32 {
+entry:
+    y_offset:usize = sizeof.i32()
+    y_ptr:usize = usize.add(point, y_offset)
+    y:i32 = i32.load(y_ptr)
+    ret (y)
+}
+
+fn point_set_x(point:usize, new_x:i32) -> void {
+entry:
+    zero_offset:usize = usize.const(0)
+    x_ptr:usize = usize.add(point, zero_offset)
+    i32.store(x_ptr, new_x)
+    ret
+}
+
+fn point_set_y(point:usize, new_y:i32) -> void {
+entry:
+    y_offset:usize = sizeof.i32()
+    y_ptr:usize = usize.add(point, y_offset)
+    i32.store(y_ptr, new_y)
+    ret
+}
+
+fn point_distance_squared(p1:usize, p2:usize) -> i32 {
+entry:
+    x1:i32 = point_get_x(p1)
+    y1:i32 = point_get_y(p1)
+    x2:i32 = point_get_x(p2)
+    y2:i32 = point_get_y(p2)
+    
+    dx:i32 = i32.sub(x2, x1)
+    dy:i32 = i32.sub(y2, y1)
+    
+    dx_sq:i32 = i32.mul(dx, dx)
+    dy_sq:i32 = i32.mul(dy, dy)
+    
+    dist_sq:i32 = i32.add(dx_sq, dy_sq)
+    ret (dist_sq)
+}
+
+fn point_destroy(point:usize) -> void {
+entry:
+    free(point)
+    ret
+}
+
+# Array operations for Point structs
+fn point_array_create(count:i32) -> usize {
+entry:
+    # Convert i32 directly to usize
+    count_usize:usize = i32.to_usize(count)
+    
+    point_sz:usize = point_size()
+    total_size:usize = usize.mul(count_usize, point_sz)
+    array_ptr:usize = alloc(total_size)
+    ret (array_ptr)
+}
+
+fn point_array_get(array:usize, index:i32) -> usize {
+entry:
+    # Convert i32 index directly to usize
+    index_usize:usize = i32.to_usize(index)
+    
+    point_sz:usize = point_size()
+    offset:usize = usize.mul(index_usize, point_sz)
+    element_ptr:usize = usize.add(array, offset)
+    ret (element_ptr)
+}
+
+fn point_array_set(array:usize, index:i32, x:i32, y:i32) -> void {
+entry:
+    element_ptr:usize = point_array_get(array, index)
+    point_set_x(element_ptr, x)
+    point_set_y(element_ptr, y)
+    ret
+}
+
+fn point_array_destroy(array:usize) -> void {
+entry:
+    free(array)
+    ret
+}
+
+# Recursive function to calculate sum of distances in array
+fn recursive_distance_sum(array:usize, start_idx:i32, end_idx:i32) -> i32 {
+entry:
+    # Base case: start >= end
+    condition:i32 = i32.lt(start_idx, end_idx)
+    br_if condition, recursive_case, base_case
+
+base_case:
+    zero:i32 = i32.const(0)
+    ret (zero)
+
+recursive_case:
+    # Get current point and next point
+    current_ptr:usize = point_array_get(array, start_idx)
+    one:i32 = i32.const(1)
+    next_idx:i32 = i32.add(start_idx, one)
+    next_ptr:usize = point_array_get(array, next_idx)
+    
+    # Calculate distance between current and next
+    current_dist:i32 = point_distance_squared(current_ptr, next_ptr)
+    
+    # Recursively calculate remaining distances
+    remaining_sum:i32 = recursive_distance_sum(array, next_idx, end_idx)
+    
+    # Sum current distance with remaining
+    total:i32 = i32.add(current_dist, remaining_sum)
+    ret (total)
+}
+
+# Iterative function to transform all points (multiply coordinates by factor) using proper SSA
+fn transform_points_iteratively(array:usize, count:i32, factor:i32) -> void {
+entry:
+    idx_init:i32 = i32.const(0)
+    br iteration_loop(idx_init)
+
+iteration_loop(idx:i32):
+    continue_condition:i32 = i32.lt(idx, count)
+    br_if continue_condition, loop_body, loop_exit
+
+loop_body:
+    # Get current point
+    point_ptr:usize = point_array_get(array, idx)
+    
+    # Get current coordinates
+    x:i32 = point_get_x(point_ptr)
+    y:i32 = point_get_y(point_ptr)
+    
+    # Transform coordinates
+    new_x:i32 = i32.mul(x, factor)
+    new_y:i32 = i32.mul(y, factor)
+    
+    # Set new coordinates
+    point_set_x(point_ptr, new_x)
+    point_set_y(point_ptr, new_y)
+    
+    # Increment and continue loop
+    one:i32 = i32.const(1)
+    new_idx:i32 = i32.add(idx, one)
+    br iteration_loop(new_idx)
+
+loop_exit:
+    ret
+}
+
+# Complex nested calculation function with proper SSA loops
+fn complex_nested_calculation(array:usize, count:i32) -> i32 {
+entry:
+    # First, transform all points by factor 2
+    factor:i32 = i32.const(2)
+    transform_points_iteratively(array, count, factor)
+    
+    # Then calculate recursive distance sum
+    start:i32 = i32.const(0)
+    one:i32 = i32.const(1)
+    end_minus_one:i32 = i32.sub(count, one)
+    distance_sum:i32 = recursive_distance_sum(array, start, end_minus_one)
+    
+    # Calculate average x coordinate using proper SSA loop with block parameters
+    total_x_init:i32 = i32.const(0)
+    idx_init:i32 = i32.const(0)
+    br sum_loop(total_x_init, idx_init)
+
+sum_loop(total_x:i32, idx:i32):
+    sum_condition:i32 = i32.lt(idx, count)
+    br_if sum_condition, sum_body, sum_done
+
+sum_body:
+    point_ptr:usize = point_array_get(array, idx)
+    x:i32 = point_get_x(point_ptr)
+    new_total_x:i32 = i32.add(total_x, x)
+    one_inc:i32 = i32.const(1)
+    new_idx:i32 = i32.add(idx, one_inc)
+    br sum_loop(new_total_x, new_idx)
+
+sum_done:
+    avg_x:i32 = i32.div(total_x, count)
+    
+    # Final complex calculation: distance_sum + avg_x * count
+    factor_part:i32 = i32.mul(avg_x, count)
+    result:i32 = i32.add(distance_sum, factor_part)
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    # Create array of 4 points
+    count:i32 = i32.const(4)
+    array:usize = point_array_create(count)
+    
+    # Initialize points: (1,2), (3,4), (5,6), (7,8)
+    idx0:i32 = i32.const(0)
+    x0:i32 = i32.const(1)
+    y0:i32 = i32.const(2)
+    point_array_set(array, idx0, x0, y0)
+    
+    idx1:i32 = i32.const(1)
+    x1:i32 = i32.const(3)
+    y1:i32 = i32.const(4)
+    point_array_set(array, idx1, x1, y1)
+    
+    idx2:i32 = i32.const(2)
+    x2:i32 = i32.const(5)
+    y2:i32 = i32.const(6)
+    point_array_set(array, idx2, x2, y2)
+    
+    idx3:i32 = i32.const(3)
+    x3:i32 = i32.const(7)
+    y3:i32 = i32.const(8)
+    point_array_set(array, idx3, x3, y3)
+    
+    # Perform complex nested calculation
+    result:i32 = complex_nested_calculation(array, count)
+    
+    # Clean up
+    point_array_destroy(array)
+    
+    ret (result)
+}

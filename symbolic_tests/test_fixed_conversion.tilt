@@ -1,0 +1,42 @@
+import "host" "alloc" (size:i64) -> ptr
+import "host" "free" (p:ptr) -> void
+import "host" "print_i32" (x:i32) -> void
+
+# Fixed version: allocate 8 bytes for i64 operations
+fn test_fixed_conversion() -> i32 {
+entry:
+    count:i32 = i32.const(4)
+    
+    # Allocate 8 bytes for i64 storage
+    temp_size:i64 = i64.const(8)
+    temp_ptr:ptr = alloc(temp_size)
+    
+    # Store i32 in first 4 bytes, then load as i64
+    # Note: This assumes little-endian architecture
+    i32.store(temp_ptr, count)
+    
+    # Clear the upper 4 bytes to avoid garbage
+    zero:i32 = i32.const(0)
+    four_offset:i64 = i64.const(4)
+    upper_ptr:ptr = ptr.add(temp_ptr, four_offset)
+    i32.store(upper_ptr, zero)
+    
+    # Now load as i64
+    count_i64:i64 = i64.load(temp_ptr)
+    free(temp_ptr)
+    
+    # Convert back to i32 for printing
+    temp_ptr2:ptr = alloc(temp_size)
+    i64.store(temp_ptr2, count_i64)
+    result:i32 = i32.load(temp_ptr2)
+    print_i32(result)  # Should print 4
+    free(temp_ptr2)
+    
+    ret (result)
+}
+
+fn main() -> i32 {
+entry:
+    result:i32 = test_fixed_conversion()
+    ret (result)
+}

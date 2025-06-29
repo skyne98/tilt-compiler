@@ -1,0 +1,4 @@
+Expected Output: 128
+Description: Advanced fragile test - struct emulation with arrays, recursion, iteration, and nested function calls
+Calculation: After transformation by 2, points become (2,4), (6,8), (10,12), (14,16)
+Distance calculations (32+32+32=96) + average operations (8*4=32) result in 128

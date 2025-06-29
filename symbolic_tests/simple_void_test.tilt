@@ -1,0 +1,16 @@
+# Simple test for void function calls
+
+import "host" "print_i32" (x:i32) -> void
+
+fn print_value(x:i32) -> void {
+entry:
+    print_i32(x)
+    ret
+}
+
+fn main() -> i32 {
+entry:
+    val:i32 = i32.const(42)
+    print_value(val)
+    ret (val)
+}

@@ -37,8 +37,8 @@ pub enum Token<'a> {
     TF32,
     #[token("f64")]
     TF64,
-    #[token("ptr")]
-    TPtr,
+    #[token("usize")]
+    TUsize,
     #[token("void")]
     TVoid,
 

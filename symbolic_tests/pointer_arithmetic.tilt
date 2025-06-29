@@ -1,21 +1,21 @@
-import "host" "alloc" (size:i64) -> ptr
-import "host" "free" (p:ptr) -> void
+import "host" "alloc" (size:usize) -> usize
+import "host" "free" (p:usize) -> void
 
 fn main() -> i32 {
 entry:
-    size:i64 = i64.const(8)  # Allocate space for 2 i32 values
-    ptr:ptr = alloc(size)
+    size:usize = usize.const(8)  # Allocate space for 2 i32 values
+    ptr:usize = alloc(size)
     
     # Test pointer arithmetic
-    offset:i64 = i64.const(0)
-    ptr_with_offset:ptr = ptr.add(ptr, offset)
+    offset:usize = usize.const(0)
+    ptr_with_offset:usize = usize.add(ptr, offset)
     
     first_value:i32 = i32.const(10)
     i32.store(ptr_with_offset, first_value)
     
     # Add offset for second i32
-    offset2:i64 = sizeof.i32()
-    ptr2:ptr = ptr.add(ptr, offset2)
+    offset2:usize = sizeof.i32()
+    ptr2:usize = usize.add(ptr, offset2)
     second_value:i32 = i32.const(20)
     i32.store(ptr2, second_value)
     

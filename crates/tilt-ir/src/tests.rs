@@ -48,6 +48,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Ret(None),
             }],
@@ -77,6 +78,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![Instruction::Assign {
                     dest: TypedIdentifier {
                         name: "result",
@@ -129,6 +131,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![Instruction::ExpressionStatement {
                     expr: Expression::Call {
                         name: "putc",
@@ -164,11 +167,16 @@ mod tests {
             blocks: vec![
                 Block {
                     label: "entry",
+                    params: vec![],
                     instructions: vec![],
-                    terminator: Terminator::Br { label: "exit" },
+                    terminator: Terminator::Br {
+                        label: "exit",
+                        args: vec![],
+                    },
                 },
                 Block {
                     label: "exit",
+                    params: vec![],
                     instructions: vec![],
                     terminator: Terminator::Ret(None),
                 },
@@ -179,7 +187,7 @@ mod tests {
 
         assert_eq!(result.functions[0].blocks.len(), 2);
 
-        if let crate::Terminator::Br { target } = &result.functions[0].blocks[0].terminator {
+        if let crate::Terminator::Br { target, .. } = &result.functions[0].blocks[0].terminator {
             assert_eq!(*target, BlockId(1)); // Should point to second block
         } else {
             panic!("Expected Br terminator");
@@ -195,6 +203,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![Instruction::Assign {
                     dest: TypedIdentifier {
                         name: "result",
@@ -232,6 +241,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![Instruction::Assign {
                     dest: TypedIdentifier {
                         name: "result",
@@ -265,9 +275,11 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Br {
                     label: "undefined_block",
+                    args: vec![],
                 },
             }],
         };
@@ -288,6 +300,7 @@ mod tests {
             return_type: Type::Void,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Ret(None),
             }],
@@ -298,6 +311,7 @@ mod tests {
             return_type: Type::I32,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Ret(None), // This will also cause a type error
             }],
@@ -326,6 +340,7 @@ mod tests {
             return_type: Type::I32,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Ret(None), // Void return for I32 function
             }],
@@ -368,6 +383,7 @@ mod integration_tests {
             return_type: Type::I32,
             blocks: vec![Block {
                 label: "entry",
+                params: vec![],
                 instructions: vec![],
                 terminator: Terminator::Ret(Some(Value::Variable("undefined_var"))), // This should fail
             }],
@@ -380,11 +396,16 @@ mod integration_tests {
             blocks: vec![
                 Block {
                     label: "entry",
+                    params: vec![],
                     instructions: vec![],
-                    terminator: Terminator::Br { label: "exit" },
+                    terminator: Terminator::Br {
+                        label: "exit",
+                        args: vec![],
+                    },
                 },
                 Block {
                     label: "exit",
+                    params: vec![],
                     instructions: vec![],
                     terminator: Terminator::Ret(None),
                 },

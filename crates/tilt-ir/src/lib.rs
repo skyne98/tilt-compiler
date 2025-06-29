@@ -1,7 +1,7 @@
 // ===================================================================
 // FILE: lib.rs (tilt-ir crate)
 //
-// DESC: Defines the Intermediate Representation (IR) for the TILT 
+// DESC: Defines the Intermediate Representation (IR) for the TILT
 //       language. This is a graph-based representation optimized for
 //       analysis, optimization, and code generation.
 // ===================================================================
@@ -28,7 +28,7 @@ pub struct Program {
 pub struct ImportDecl {
     pub module: String,
     pub name: String,
-    pub calling_convention: Option<String>,  // e.g., "c" for C calling convention
+    pub calling_convention: Option<String>, // e.g., "c" for C calling convention
     pub params: Vec<Type>,
     pub return_type: Type,
 }
@@ -58,7 +58,7 @@ pub struct ValueId(pub usize);
 #[derive(Debug, Clone, PartialEq)]
 pub struct BasicBlock {
     pub id: BlockId,
-    pub label: String, // Keep original label for debugging
+    pub label: String,                // Keep original label for debugging
     pub params: Vec<(ValueId, Type)>, // Phi nodes represented as block parameters
     pub instructions: Vec<Instruction>,
     pub terminator: Terminator,
@@ -107,11 +107,7 @@ pub enum Instruction {
         ty: Type,
     },
     /// Constant assignment
-    Const {
-        dest: ValueId,
-        value: i64,
-        ty: Type,
-    },
+    Const { dest: ValueId, value: i64, ty: Type },
     /// Pointer arithmetic - add offset to pointer
     PtrAdd {
         dest: ValueId,
@@ -119,18 +115,17 @@ pub enum Instruction {
         offset: ValueId,
     },
     /// Get size of type in bytes
-    SizeOf {
-        dest: ValueId,
-        ty: Type,
-    },
+    SizeOf { dest: ValueId, ty: Type },
     /// Host ABI allocation
-    Alloc {
-        dest: ValueId,
-        size: ValueId,
-    },
+    Alloc { dest: ValueId, size: ValueId },
     /// Host ABI deallocation
-    Free {
-        ptr: ValueId,
+    Free { ptr: ValueId },
+    /// Type conversion between numeric types
+    Convert {
+        dest: ValueId,
+        src: ValueId,
+        from_ty: Type,
+        to_ty: Type,
     },
 }
 
@@ -138,18 +133,16 @@ pub enum Instruction {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Terminator {
     /// Return from function
-    Ret {
-        value: Option<ValueId>,
-    },
+    Ret { value: Option<ValueId> },
     /// Unconditional branch
-    Br {
-        target: BlockId,
-    },
+    Br { target: BlockId, args: Vec<ValueId> },
     /// Conditional branch
     BrIf {
         cond: ValueId,
         true_target: BlockId,
+        true_args: Vec<ValueId>,
         false_target: BlockId,
+        false_args: Vec<ValueId>,
     },
 }
 
@@ -185,15 +178,9 @@ pub enum UnaryOperator {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SemanticError {
     /// Undefined variable or function
-    UndefinedIdentifier {
-        name: String,
-        location: String,
-    },
+    UndefinedIdentifier { name: String, location: String },
     /// Duplicate definition
-    DuplicateDefinition {
-        name: String,
-        location: String,
-    },
+    DuplicateDefinition { name: String, location: String },
     /// Type mismatch
     TypeMismatch {
         expected: Type,
@@ -207,24 +194,16 @@ pub enum SemanticError {
         location: String,
     },
     /// Undefined block label
-    UndefinedBlock {
-        label: String,
-        location: String,
-    },
+    UndefinedBlock { label: String, location: String },
     /// Missing terminator in block
-    MissingTerminator {
-        block: String,
-    },
+    MissingTerminator { block: String },
     /// Invalid phi node reference
     InvalidPhiReference {
         block: String,
         referenced_block: String,
     },
     /// Function not found
-    FunctionNotFound {
-        name: String,
-        location: String,
-    },
+    FunctionNotFound { name: String, location: String },
     /// Wrong number of arguments
     ArgumentMismatch {
         function: String,
@@ -243,11 +222,27 @@ impl std::fmt::Display for SemanticError {
             SemanticError::DuplicateDefinition { name, location } => {
                 write!(f, "Duplicate definition of '{}' at {}", name, location)
             }
-            SemanticError::TypeMismatch { expected, found, location } => {
-                write!(f, "Type mismatch at {}: expected {:?}, found {:?}", location, expected, found)
+            SemanticError::TypeMismatch {
+                expected,
+                found,
+                location,
+            } => {
+                write!(
+                    f,
+                    "Type mismatch at {}: expected {:?}, found {:?}",
+                    location, expected, found
+                )
             }
-            SemanticError::InvalidOperation { operation, ty, location } => {
-                write!(f, "Invalid operation '{}' for type {:?} at {}", operation, ty, location)
+            SemanticError::InvalidOperation {
+                operation,
+                ty,
+                location,
+            } => {
+                write!(
+                    f,
+                    "Invalid operation '{}' for type {:?} at {}",
+                    operation, ty, location
+                )
             }
             SemanticError::UndefinedBlock { label, location } => {
                 write!(f, "Undefined block '{}' referenced at {}", label, location)
@@ -255,14 +250,30 @@ impl std::fmt::Display for SemanticError {
             SemanticError::MissingTerminator { block } => {
                 write!(f, "Block '{}' is missing a terminator instruction", block)
             }
-            SemanticError::InvalidPhiReference { block, referenced_block } => {
-                write!(f, "Block '{}' references non-existent predecessor '{}'", block, referenced_block)
+            SemanticError::InvalidPhiReference {
+                block,
+                referenced_block,
+            } => {
+                write!(
+                    f,
+                    "Block '{}' references non-existent predecessor '{}'",
+                    block, referenced_block
+                )
             }
             SemanticError::FunctionNotFound { name, location } => {
                 write!(f, "Function '{}' not found at {}", name, location)
             }
-            SemanticError::ArgumentMismatch { function, expected, found, location } => {
-                write!(f, "Function '{}' at {} expects {} arguments, got {}", function, location, expected, found)
+            SemanticError::ArgumentMismatch {
+                function,
+                expected,
+                found,
+                location,
+            } => {
+                write!(
+                    f,
+                    "Function '{}' at {} expects {} arguments, got {}",
+                    function, location, expected, found
+                )
             }
         }
     }
@@ -274,7 +285,7 @@ impl BlockId {
     pub fn new(id: usize) -> Self {
         BlockId(id)
     }
-    
+
     pub fn index(self) -> usize {
         self.0
     }
@@ -284,7 +295,7 @@ impl ValueId {
     pub fn new(id: usize) -> Self {
         ValueId(id)
     }
-    
+
     pub fn index(self) -> usize {
         self.0
     }
@@ -303,7 +314,7 @@ impl Function {
             constants: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Generate the next unique value ID
     pub fn next_value(&mut self) -> ValueId {
         let id = self.next_value_id;
